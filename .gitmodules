@@ -1,0 +1,3 @@
+[submodule "lib/pico-ds3231"]
+	path = lib/pico-ds3231
+	url = https://github.com/shatterbind/pico-ds3231
