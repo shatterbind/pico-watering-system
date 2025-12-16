@@ -29,12 +29,14 @@ pico_sdk_init()
 add_subdirectory(lib/pico-ds3231/src)
 include_directories(lib/pico-ds3231/src)
 
-add_subdirectory(lib/pico-epd-driver/src/canvas)
-add_subdirectory(lib/pico-epd-driver/src/epd_2_13)
 add_subdirectory(lib/pico-epd-driver/src/common)
-include_directories(lib/pico-epd-driver/src/canvas)
-include_directories(lib/pico-epd-driver/src/epd_2_13)
 include_directories(lib/pico-epd-driver/src/common)
+
+add_subdirectory(lib/pico-epd-driver/src/epd_2_13)
+include_directories(lib/pico-epd-driver/src/epd_2_13)
+
+add_subdirectory(lib/pico-epd-driver/src/canvas)
+include_directories(lib/pico-epd-driver/src/canvas)
 
 add_executable(${CMAKE_PROJECT_NAME} main.c)
 
