@@ -45,4 +45,4 @@ pico_enable_stdio_uart(${CMAKE_PROJECT_NAME} 1)
 
 pico_add_extra_outputs(${CMAKE_PROJECT_NAME})
 
-target_link_libraries(${CMAKE_PROJECT_NAME} pico_stdlib ds3231 epd_2_13 canvas common hardware_i2c hardware_spi hardware_pio hardware_adc hardware_interp hardware_adc hardware_xosc hardware_powman hardware_sync)
+target_link_libraries(${CMAKE_PROJECT_NAME} pico_stdlib pico_multicore ds3231 epd_2_13 canvas common hardware_i2c hardware_spi hardware_pio hardware_adc hardware_interp hardware_adc hardware_xosc hardware_powman hardware_sync)
