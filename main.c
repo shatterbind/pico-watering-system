@@ -16,13 +16,14 @@
 
 #define HUMIDITY_ADC_PIN 0 // 26
 
-#define AIR_VALUE 0.0f
+#define AIR_VALUE 4095.0f
 #define WATER_VALUE 1100.0f
 
 #define MIN_HUMIDITY 40.0f
 
 #define TIME_POMP_ON 5000
 #define POMP_PIN 22
+#define USE_RELAY_GND_ON true
 
 #define TEMP_SENSOR_CHANNEL 4
 #define WAKEUP_GPIO 15
@@ -34,7 +35,7 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 #define I2C_SCL_PIN 20
 #define I2C_SDA_PIN 21
 
-#define CONFIGURE_RTC 0
+#define CONFIGURE_RTC 1
 #define CONFIGURE_ALARM_1 1
 #define CONFIGURE_ALARM_2 0
 
@@ -81,11 +82,11 @@ void humidity_sensor_init(uint gpio) {
 void pomp(float humidity) {
 
   if (humidity < MIN_HUMIDITY) {
-    gpio_put(POMP_PIN, false);
+    gpio_put(POMP_PIN, !USE_RELAY_GND_ON);
     sleep_ms(TIME_POMP_ON);
   }
 
-  gpio_put(POMP_PIN, true);
+  gpio_put(POMP_PIN, USE_RELAY_GND_ON);
 }
 
 static void core1_entry(void) {
@@ -226,9 +227,13 @@ int main() {
   humidity_sensor_init(26);
 
   gpio_init(POMP_PIN);
-  gpio_put(POMP_PIN, 1); // set HIGH before output mode (pump OFF)
   gpio_set_dir(POMP_PIN, GPIO_OUT);
+
+#ifdef USE_RELAY_GND_ON
   gpio_pull_up(POMP_PIN);
+#else
+  gpio_pull_down(POMP_PIN);
+#endif
 
   gpio_init(WAKEUP_GPIO);
   gpio_set_dir(WAKEUP_GPIO, GPIO_IN);
