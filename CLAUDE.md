@@ -11,7 +11,7 @@ C firmware (Pico SDK 2.2.0) for a Raspberry Pi Pico 2 (RP2350) plant watering co
 ## Dependencies (git submodules in `lib/`, by the same author)
 - `lib/pico-ds3231`: DS3231 RTC driver (I2C0, SDA 21 / SCL 20)
 - `lib/pico-epd-driver`: e-paper driver. The project uses `common`, `epd_2_13` and `canvas`. Its pins are defined in `epd_2_13.h` (DC 8, CS 9, CLK 10, MOSI 11, RST 12, BUSY 13).
-- After cloning, run `git submodule update --init`. `lib` is in `.gitignore`, but the submodules are still tracked.
+- After cloning, run `git submodule update --init`. To move them to the latest upstream, run `git submodule update --remote --merge && git add lib` (see the README).
 
 ## Build
 `cmake -S . -B build -G Ninja && cmake --build build`. This needs the Pico VS Code extension toolchain in `~/.pico-sdk`. Do not edit the "DO NOT EDIT" block in `CMakeLists.txt`.
