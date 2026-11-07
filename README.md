@@ -71,6 +71,24 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
+### Updating the submodules
+
+The libraries in `lib/` are git submodules that track their `main` branch (see `.gitmodules`).
+
+```sh
+# Check out the exact commits this repo pins (after a clone or pull):
+git submodule update --init --recursive
+
+# Pull the latest upstream commits of the libraries:
+git submodule update --remote --merge
+
+# Record the new library versions in this repo:
+git add lib
+git commit -m "update modules"
+```
+
+Check what changed with `git submodule status` or `git diff --submodule`.
+
 Flash `build/pico_watering_system.uf2` by copying it to the board in BOOTSEL mode, or run `picotool load -x`.
 
 ## Safety
