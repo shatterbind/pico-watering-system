@@ -1,115 +1,84 @@
 # pico-watering-system
 
-Simple Raspberry Pi Pico W automatic watering controller example. Includes wiring diagrams (ASCII + Mermaid) and sample MicroPython code to read a soil moisture sensor and drive a pump through a relay.
+Low-power automatic plant watering controller for the **Raspberry Pi Pico 2 (RP2350)**, written in C on the Pico SDK.
 
-## Parts
-- Raspberry Pi Pico W
-- Relay module (5V) or MOSFET + flyback diode if using DC pump
-- Small water pump (use appropriate voltage/current supply)
-- Soil moisture sensor (analog)
-- External 5V power supply for pump/relay
-- Jumper wires, breadboard
+The board spends almost all its time powered off. A DS3231 RTC alarm wakes it. It then reads a capacitive soil-moisture sensor, runs the pump if the soil is too dry, refreshes a 2.13" e-paper display, and powers itself off again.
 
-## Wiring (summary)
-- Never drive the pump directly from the Pico. Use a relay or transistor and an external power supply.
-- Connect grounds: Pico GND and external power supply GND must be common.
+## How it works
 
-Example pin mapping used in the sample code:
-```
-Pico W GP15  -> Relay input (active LOW or HIGH depending on module)
-Pico W GP26  -> Soil moisture analog input (ADC0)
-Pico W GND   -> Common ground
-External 5V   -> Pump and relay VCC (relay VCC may need 5V)
-Relay GND     -> Common ground
-Pump +        -> External 5V
-Pump -        -> Relay NO or transistor MOSFET drain
-```
+1. **Wake.** The DS3231 alarm pulls its `INT/SQW` line low on `GP15`, and the RP2350 `powman` GPIO wake brings the chip out of the power-off state. This is a full reboot, so `main()` runs from the top.
+2. **RTC.** The RTC time is set from the firmware compile time only if the RTC is behind it (new module or dead coin cell). Alarm 1 is (re)armed and interrupt mode is enabled.
+3. **Measure.** It reads soil moisture on `ADC0 / GP26` and maps it to 0–100 % using `AIR_VALUE` and `WATER_VALUE`. It also reads the on-chip temperature sensor.
+4. **Water.** The moisture value goes to **core 1**. If it is below `MIN_HUMIDITY`, the relay switches on for `TIME_POMP_ON` ms. Meanwhile core 0 redraws the e-paper display.
+5. **Sleep.** Once the pump finishes and the alarm flags are cleared, the board enters the `powman` power-off state.
 
-## Wiring table
-| Component         | Pico pin / Supply       |
-|------------------:|:-----------------------|
-| Relay IN          | GP15                   |
-| Relay VCC         | +5V (external)         |
-| Relay GND         | GND (common)           |
-| Pump +            | +5V (external)         |
-| Pump -            | Relay NO               |
-| Soil sensor Vout  | GP26 (ADC0)            |
-| Soil sensor VCC   | 3.3V (or sensor spec)  |
-| Soil sensor GND   | GND (common)           |
+The e-paper display shows the last-update date and time, moisture in %, the raw ADC value and the chip temperature.
 
-## ASCII wiring diagram
-```
-[Pico W]                 [Relay module]         [Pump]      [Power]
-    GP15  --- Relay IN
-    GP26  --- Soil Vout (ADC)
-    3V3   --- Soil VCC
-    GND  ------------------------ GND ---------- GND
-                                                         Relay VCC --- +5V (external)
-Pump + ----------------------- +5V (external)
-Pump - ---------------- Relay NO (or transistor)
-```
+## Hardware
 
-## Mermaid circuit overview (rendered where supported)
-```mermaid
-flowchart LR
-    Pico[Pico W]
-    Relay[Relay Module]
-    Pump[Water Pump]
-    Sensor[Soil Moisture Sensor]
-    PS[External 5V Supply]
+| Part | Notes |
+|---|---|
+| Raspberry Pi Pico 2 | `PICO_BOARD pico2` |
+| DS3231 RTC module | I2C0, with a backup coin cell |
+| 2.13" SPI e-paper | Driver: [pico-epd-driver](https://github.com/shatterbind/pico-epd-driver) |
+| Capacitive soil-moisture sensor | Analog output |
+| Relay module or MOSFET + flyback diode | Drives the pump |
+| Small DC pump + external supply | Never power the pump from the Pico |
 
-    Pico -->|GP15| Relay
-    Pico -->|GP26 (ADC)| Sensor
-    Sensor -->|VCC| Pico
-    Pico -->|GND| Relay
-    PS -->|+5V| Relay
-    PS -->|+5V| Pump
-    Relay -->|NO| Pump
-    Pico -->|GND common| PS
-```
+## Pinout
 
-## MicroPython example
-Save as `main.py` on the Pico W. Adjust pin numbers to match your wiring and relay logic (active LOW vs HIGH).
-```python
-from machine import Pin, ADC
-import time
+| Signal | Pico pin |
+|---|---|
+| Soil sensor AOUT | GP26 (ADC0) |
+| Pump relay IN | GP22 |
+| DS3231 SDA | GP21 |
+| DS3231 SCL | GP20 |
+| DS3231 INT/SQW (wake) | GP15 |
+| EPD DC | GP8 |
+| EPD CS | GP9 |
+| EPD CLK | GP10 |
+| EPD MOSI (DIN) | GP11 |
+| EPD RST | GP12 |
+| EPD BUSY | GP13 |
 
-RELAY_PIN = 15      # GP15
-SOIL_ADC_PIN = 26   # GP26 / ADC0
-WATER_THRESHOLD = 2000  # calibrate for your sensor (0-65535 on RP2 port)
+All grounds, including the pump supply's ground, must be common.
 
-relay = Pin(RELAY_PIN, Pin.OUT)
-soil = ADC(SOIL_ADC_PIN)
+## Configuration (`main.c`)
 
-def pump_on():
-        # if your relay is active LOW, write 0 to turn on
-        relay.value(0)
+| Define | Default | Meaning |
+|---|---|---|
+| `AIR_VALUE` / `WATER_VALUE` | `4095` / `1100` | Raw ADC readings with the sensor in dry air and in water. Calibrate these for your sensor (see `DEBUG`). |
+| `MIN_HUMIDITY` | `40` % | Water when moisture is below this value. |
+| `TIME_POMP_ON` | `5000` ms | How long the pump runs per wake. |
+| `POMP_PIN` | `22` | Relay control pin. |
+| `USE_RELAY_GND_ON` | `true` | `true`: the relay is active-LOW. `false`: it is active-HIGH. |
+| `CONFIGURE_RTC` | `1` | Sets the RTC from compile time when the RTC is behind. |
+| `CONFIGURE_ALARM_1` | `1` | Alarm 1: triggers when minutes and seconds match `00:00`, i.e. **once per hour**. |
+| `CONFIGURE_ALARM_2` | `0` | Optional alarm 2 (minutes match). |
+| `COMPILE_UPLOAD_OFFSET_SECONDS` | `6` | Covers the time between compiling and the board booting. |
+| `DEBUG` | off | When enabled, the firmware loops forever and prints raw and % moisture over USB/UART. Use this to calibrate. |
 
-def pump_off():
-        relay.value(1)
+## Building
 
-def read_soil():
-        return soil.read_u16()
+The project uses the Raspberry Pi Pico VS Code extension's toolchain (SDK 2.2.0, ARM GCC 14.2).
 
-try:
-        pump_off()
-        while True:
-                moisture = read_soil()
-                print("Soil:", moisture)
-                if moisture < WATER_THRESHOLD:
-                        print("Soil dry -> watering")
-                        pump_on()
-                        time.sleep(5)  # pump run time (seconds)
-                        pump_off()
-                time.sleep(10)
-except KeyboardInterrupt:
-        pump_off()
+```sh
+git clone --recurse-submodules https://github.com/shatterbind/pico-watering-system
+# or, in an existing clone:
+git submodule update --init
+
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
 
-## Safety & notes
-- Verify relay module voltage requirements (some require 5V VCC and a 3.3V logic input; others may not).
-- Use flyback diodes for inductive loads, fuses, and proper insulation for water and mains.
-- Calibrate WATER_THRESHOLD for your soil sensor and environment.
-- Test with the pump disconnected from water to verify operation before plumbing.
+Flash `build/pico_watering_system.uf2` by copying it to the board in BOOTSEL mode, or run `picotool load -x`.
 
-That's all — adjust pins and timing to your needs.
+## Safety
+
+- Use a relay or MOSFET with a flyback diode for the pump, and supply the pump separately.
+- Check that your relay module accepts a 3.3 V logic input.
+- Test with the pump out of the water first, and keep the electronics away from water.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

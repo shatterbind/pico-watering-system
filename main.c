@@ -14,7 +14,8 @@
 #include "epd.h"
 #include "epd_2_13.h"
 
-#define HUMIDITY_ADC_PIN 0 // 26
+#define HUMIDITY_GPIO 26     // GP26
+#define HUMIDITY_ADC_INPUT 0 // ADC0 == GP26
 
 #define AIR_VALUE 4095.0f
 #define WATER_VALUE 1100.0f
@@ -35,6 +36,12 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 #define I2C_SCL_PIN 20
 #define I2C_SDA_PIN 21
 
+/**
+ * @brief When 1, the DS3231 is set from the firmware compile time, but only if
+ * the RTC is behind it (fresh module / dead backup battery). Waking from the
+ * power-off state is a full reboot, so unconditionally setting the time here
+ * would roll the clock back on every wake.
+ */
 #define CONFIGURE_RTC 1
 #define CONFIGURE_ALARM_1 1
 #define CONFIGURE_ALARM_2 0
@@ -73,13 +80,13 @@ static int enter_power_off_state(void) {
   return rc;
 }
 
-void humidity_sensor_init(uint gpio) {
+static void humidity_sensor_init(uint gpio) {
   adc_init();
   adc_set_temp_sensor_enabled(true);
   adc_gpio_init(gpio);
 }
 
-void pomp(float humidity) {
+static void pomp(float humidity) {
 
   if (humidity < MIN_HUMIDITY) {
     gpio_put(POMP_PIN, !USE_RELAY_GND_ON);
@@ -102,7 +109,7 @@ static float read_onboard_temperature(bool toCelsius) {
   float tempC;
   const float conversionFactor = 3.3f / (1 << 12);
 
-  adc_select_input(4);
+  adc_select_input(TEMP_SENSOR_CHANNEL);
 
   adc = (float)adc_read() * conversionFactor;
   tempC = 27.0f - (adc - 0.706f) / 0.001721f;
@@ -110,17 +117,35 @@ static float read_onboard_temperature(bool toCelsius) {
   return toCelsius ? tempC : tempC * 9 / 5 + 32;
 }
 
-static uint16_t read_humiduty() {
+static uint16_t read_humidity_raw(void) {
   uint16_t raw;
 
-  adc_select_input(HUMIDITY_ADC_PIN);
+  adc_select_input(HUMIDITY_ADC_INPUT);
   raw = adc_read();
 
   return raw;
 }
 
-static int setup_rtc(void) {
-  printf("Setting RTC time from PC compile time...\n");
+static float raw_to_humidity(uint16_t raw) {
+  float humidity = (AIR_VALUE - raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+
+  if (humidity < 0.0f) {
+    return 0.0f;
+  }
+  if (humidity > 100.0f) {
+    return 100.0f;
+  }
+  return humidity;
+}
+
+/** Packs a datetime into a monotonically comparable integer. */
+static uint64_t datetime_key(const ds3231_datetime_t *dt) {
+  return ((uint64_t)dt->year << 40) | ((uint64_t)dt->month << 32) |
+         ((uint64_t)dt->day << 24) | ((uint64_t)dt->hour << 16) |
+         ((uint64_t)dt->min << 8) | dt->sec;
+}
+
+static void setup_rtc(void) {
 
   struct tm compile_tm = {0};
 
@@ -157,10 +182,16 @@ static int setup_rtc(void) {
       .min = (uint8_t)now_tm->tm_min,
       .sec = (uint8_t)now_tm->tm_sec};
 
-  if (ds3231_set_time(&dt_to_set)) {
-    printf("Time set successfully!\n");
-  } else {
-    printf("ERROR: Failed to set time.\n");
+  ds3231_datetime_t current;
+  bool rtc_ok = ds3231_read_time(&current);
+
+  if (!rtc_ok || datetime_key(&current) < datetime_key(&dt_to_set)) {
+    printf("RTC behind compile time, setting it...\n");
+    if (ds3231_set_time(&dt_to_set)) {
+      printf("Time set successfully!\n");
+    } else {
+      printf("ERROR: Failed to set time.\n");
+    }
   }
 
 #if CONFIGURE_ALARM_1
@@ -224,12 +255,15 @@ int main() {
   on_state = powman_power_state_with_domain_on(on_state,
                                                POWMAN_POWER_DOMAIN_XIP_CACHE);
 
-  humidity_sensor_init(26);
+  humidity_sensor_init(HUMIDITY_GPIO);
 
+  // Latch the "pump off" level before enabling the output driver so an
+  // active-low relay does not click on at boot.
   gpio_init(POMP_PIN);
+  gpio_put(POMP_PIN, USE_RELAY_GND_ON);
   gpio_set_dir(POMP_PIN, GPIO_OUT);
 
-#ifdef USE_RELAY_GND_ON
+#if USE_RELAY_GND_ON
   gpio_pull_up(POMP_PIN);
 #else
   gpio_pull_down(POMP_PIN);
@@ -275,8 +309,8 @@ int main() {
   printf("Current RTC time: %02d-%02d-%02d %02d:%02d:%02d\n", now.day,
          now.month, now.year, now.hour, now.min, now.sec);
   while (true) {
-    const uint16_t raw = read_humiduty();
-    float humidity = (AIR_VALUE - raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+    const uint16_t raw = read_humidity_raw();
+    float humidity = raw_to_humidity(raw);
 
     snprintf(buffer, sizeof(buffer), "%.2f%%", humidity);
 
@@ -287,8 +321,8 @@ int main() {
   }
 #endif
 
-  const uint16_t raw = read_humiduty();
-  float humidity = (AIR_VALUE - raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+  const uint16_t raw = read_humidity_raw();
+  float humidity = raw_to_humidity(raw);
 
   snprintf(buffer, sizeof(buffer), "%.2f%%", humidity);
   draw_text(&epd, 10, 120, buffer, FONT_TAHOMA_24, BLACK, 3, canvas);
@@ -329,7 +363,7 @@ int main() {
   int rc = enter_power_off_state();
   hard_assert(rc == PICO_OK);
 
-  // shall never to loop
+  // Should never be reached: blink to signal a failed power-off.
   while (true) {
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
     sleep_ms(200);
