@@ -14,33 +14,66 @@
 #include "epd.h"
 #include "epd_2_13.h"
 
+// ---------------------------------------------------------------------------
+// Soil moisture sensor
+// ---------------------------------------------------------------------------
 #define HUMIDITY_GPIO 26     // GP26
 #define HUMIDITY_ADC_INPUT 0 // ADC0 == GP26
 
-#define AIR_VALUE 4095.0f
-#define WATER_VALUE 1100.0f
+/**
+ * @brief GPIO that powers the sensor's VCC, or -1 if VCC is wired to 3V3.
+ * Powering the sensor from a GPIO lets it be switched off between wakes
+ * (a capacitive sensor draws ~5 mA, which dominates sleep current).
+ */
+#define SENSOR_POWER_PIN -1
+#define SENSOR_WARMUP_MS 200
 
+#define AIR_VALUE 4095.0f   // raw ADC in dry air
+#define WATER_VALUE 1100.0f // raw ADC in water
+
+#define ADC_SAMPLES 16
+/** Max spread (max - min) of the samples; more means a floating/broken wire. */
+#define SENSOR_MAX_SPREAD 300
+/** Raw values below this are "wetter than water": shorted or disconnected. */
+#define SENSOR_MIN_RAW 300
+
+// ---------------------------------------------------------------------------
+// Pump
+// ---------------------------------------------------------------------------
 #define MIN_HUMIDITY 40.0f
 
 #define TIME_POMP_ON 5000
-#define POMP_PIN 22
-#define USE_RELAY_GND_ON true
+/** Never run the pump twice within this many minutes (guards wake loops). */
+#define MIN_POMP_INTERVAL_MIN 50
 
+#define POMP_PIN 22
+#define USE_RELAY_GND_ON true // true: relay is active-LOW
+
+// ---------------------------------------------------------------------------
+// Board
+// ---------------------------------------------------------------------------
 #define TEMP_SENSOR_CHANNEL 4
 #define WAKEUP_GPIO 15
-
-static powman_power_state off_state = POWMAN_POWER_STATE_NONE;
-static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
+#define EPD_DC_PIN 8
 
 #define I2C_BAUDRATE (100 * 1000)
-#define I2C_SCL_PIN 20
-#define I2C_SDA_PIN 21
+#define I2C_SDA_PIN 20 // GP20 is I2C0 SDA (fixed by hardware)
+#define I2C_SCL_PIN 21 // GP21 is I2C0 SCL
 
 /**
- * @brief When 1, the DS3231 is set from the firmware compile time, but only if
- * the RTC is behind it (fresh module / dead backup battery). Waking from the
- * power-off state is a full reboot, so unconditionally setting the time here
- * would roll the clock back on every wake.
+ * POWMAN scratch registers keep their value across the power-off state (but
+ * not across a loss of power), so they remember the last pump run.
+ */
+#define SCRATCH_MAGIC_IDX 6
+#define SCRATCH_LAST_POMP_IDX 7
+#define SCRATCH_MAGIC 0x504F4D50u // "POMP"
+
+/**
+ * @brief When 1, the DS3231 is set from the firmware compile time if its
+ * oscillator-stop flag is set (fresh module / dead backup battery) or it is
+ * behind the compile time. Waking from the power-off state is a full reboot,
+ * so unconditionally setting the time here would roll the clock back on
+ * every wake.
  */
 #define CONFIGURE_RTC 1
 #define CONFIGURE_ALARM_1 1
@@ -52,6 +85,14 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
  * @brief Delay in seconds to compensate for compilation and upload time.
  */
 #define COMPILE_UPLOAD_OFFSET_SECONDS 6
+
+static powman_power_state off_state = POWMAN_POWER_STATE_NONE;
+static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
+
+typedef struct {
+  uint16_t raw;
+  bool ok;
+} soil_reading_t;
 
 static int enter_power_off_state(void) {
   stdio_flush();
@@ -80,27 +121,42 @@ static int enter_power_off_state(void) {
   return rc;
 }
 
+static void pomp_pin_init(void) {
+  // Latch the "pump off" level before enabling the output driver so an
+  // active-low relay does not click on at boot.
+  gpio_init(POMP_PIN);
+  gpio_put(POMP_PIN, USE_RELAY_GND_ON);
+  gpio_set_dir(POMP_PIN, GPIO_OUT);
+
+#if USE_RELAY_GND_ON
+  gpio_pull_up(POMP_PIN);
+#else
+  gpio_pull_down(POMP_PIN);
+#endif
+}
+
 static void humidity_sensor_init(uint gpio) {
   adc_init();
   adc_set_temp_sensor_enabled(true);
   adc_gpio_init(gpio);
+
+#if SENSOR_POWER_PIN >= 0
+  gpio_init(SENSOR_POWER_PIN);
+  gpio_put(SENSOR_POWER_PIN, 0);
+  gpio_set_dir(SENSOR_POWER_PIN, GPIO_OUT);
+#endif
 }
 
-static void pomp(float humidity) {
+/** Core 1: receives the pump run time in ms (0 = don't run), then acks. */
+static void core1_entry(void) {
+  uint32_t run_ms = multicore_fifo_pop_blocking();
 
-  if (humidity < MIN_HUMIDITY) {
+  if (run_ms > 0) {
     gpio_put(POMP_PIN, !USE_RELAY_GND_ON);
-    sleep_ms(TIME_POMP_ON);
+    sleep_ms(run_ms);
   }
 
   gpio_put(POMP_PIN, USE_RELAY_GND_ON);
-}
-
-static void core1_entry(void) {
-  uint32_t raw = multicore_fifo_pop_blocking();
-  float humidity;
-  memcpy(&humidity, &raw, sizeof(float));
-  pomp(humidity);
   multicore_fifo_push_blocking(1); // signal done
 }
 
@@ -117,13 +173,42 @@ static float read_onboard_temperature(bool toCelsius) {
   return toCelsius ? tempC : tempC * 9 / 5 + 32;
 }
 
-static uint16_t read_humidity_raw(void) {
-  uint16_t raw;
+/**
+ * Averages ADC_SAMPLES readings. A disconnected (floating) input is noisy and
+ * a shorted one reads near 0; both are reported as not ok so the pump never
+ * runs on a bogus "dry" value.
+ */
+static soil_reading_t read_soil(void) {
+#if SENSOR_POWER_PIN >= 0
+  gpio_put(SENSOR_POWER_PIN, 1);
+  sleep_ms(SENSOR_WARMUP_MS);
+#endif
 
   adc_select_input(HUMIDITY_ADC_INPUT);
-  raw = adc_read();
 
-  return raw;
+  uint32_t sum = 0;
+  uint16_t min = UINT16_MAX;
+  uint16_t max = 0;
+
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    uint16_t v = adc_read();
+    sum += v;
+    if (v < min) {
+      min = v;
+    }
+    if (v > max) {
+      max = v;
+    }
+    sleep_us(200);
+  }
+
+#if SENSOR_POWER_PIN >= 0
+  gpio_put(SENSOR_POWER_PIN, 0);
+#endif
+
+  soil_reading_t r = {.raw = (uint16_t)(sum / ADC_SAMPLES)};
+  r.ok = (max - min) <= SENSOR_MAX_SPREAD && r.raw >= SENSOR_MIN_RAW;
+  return r;
 }
 
 static float raw_to_humidity(uint16_t raw) {
@@ -145,8 +230,25 @@ static uint64_t datetime_key(const ds3231_datetime_t *dt) {
          ((uint64_t)dt->min << 8) | dt->sec;
 }
 
-static void setup_rtc(void) {
+/** Minutes since the epoch, for interval checks. */
+static bool datetime_to_minutes(const ds3231_datetime_t *dt, uint32_t *out) {
+  struct tm t = {.tm_year = dt->year + 100, // years since 1900
+                 .tm_mon = dt->month - 1,
+                 .tm_mday = dt->day,
+                 .tm_hour = dt->hour,
+                 .tm_min = dt->min,
+                 .tm_sec = 0};
+  time_t s = mktime(&t);
 
+  if (s == (time_t)-1) {
+    return false;
+  }
+  *out = (uint32_t)(s / 60);
+  return true;
+}
+
+#if CONFIGURE_RTC
+static void setup_rtc(void) {
   struct tm compile_tm = {0};
 
   sscanf(__DATE__, "%*s %d %d", &compile_tm.tm_mday, &compile_tm.tm_year);
@@ -182,12 +284,16 @@ static void setup_rtc(void) {
       .min = (uint8_t)now_tm->tm_min,
       .sec = (uint8_t)now_tm->tm_sec};
 
+  bool osc_stopped = false;
+  bool osf_ok = ds3231_oscillator_stopped(&osc_stopped);
+
   ds3231_datetime_t current;
   bool rtc_ok = ds3231_read_time(&current);
 
-  if (!rtc_ok || datetime_key(&current) < datetime_key(&dt_to_set)) {
-    printf("RTC behind compile time, setting it...\n");
-    if (ds3231_set_time(&dt_to_set)) {
+  if (!osf_ok || !rtc_ok || osc_stopped ||
+      datetime_key(&current) < datetime_key(&dt_to_set)) {
+    printf("RTC time invalid or behind compile time, setting it...\n");
+    if (ds3231_set_time(&dt_to_set) && ds3231_clear_oscillator_stop_flag()) {
       printf("Time set successfully!\n");
     } else {
       printf("ERROR: Failed to set time.\n");
@@ -226,7 +332,50 @@ static void setup_rtc(void) {
 #endif
 
   printf("RTC configure for interrupt mode.\n");
-  ds3231_enable_interrupt_mode();
+  if (!ds3231_enable_interrupt_mode()) {
+    printf("ERROR: Failed to enable RTC interrupt mode.\n");
+  }
+}
+#endif
+
+/**
+ * Clears both alarm flags so INT/SQW is released (it holds the wake line low
+ * until then) and verifies they really cleared. If this fails the board would
+ * re-wake immediately after powering off.
+ */
+static bool clear_alarm_flags(void) {
+  bool ok = true;
+  const ds3231_alarm_num_t alarms[] = {ALARM_1, ALARM_2};
+
+  for (size_t i = 0; i < 2; i++) {
+    if (ds3231_check_alarm_flag(alarms[i])) {
+      printf("<<<<< ALARM %d TRIGGERED! >>>>>\n", (int)i + 1);
+      if (!ds3231_clear_alarm_flag(alarms[i]) ||
+          ds3231_check_alarm_flag(alarms[i])) {
+        printf("ERROR: Failed to clear alarm %d flag.\n", (int)i + 1);
+        ok = false;
+      }
+    }
+  }
+
+  return ok;
+}
+
+/** True if the pump ran less than MIN_POMP_INTERVAL_MIN minutes ago. */
+static bool pomp_ran_recently(uint32_t now_min) {
+  if (powman_hw->scratch[SCRATCH_MAGIC_IDX] != SCRATCH_MAGIC) {
+    return false;
+  }
+
+  uint32_t last_min = powman_hw->scratch[SCRATCH_LAST_POMP_IDX];
+
+  // If the clock went backwards, don't trust the stored value.
+  return now_min >= last_min && (now_min - last_min) < MIN_POMP_INTERVAL_MIN;
+}
+
+static void remember_pomp_run(uint32_t now_min) {
+  powman_hw->scratch[SCRATCH_LAST_POMP_IDX] = now_min;
+  powman_hw->scratch[SCRATCH_MAGIC_IDX] = SCRATCH_MAGIC;
 }
 
 static void blink(uint32_t ms) {
@@ -236,13 +385,19 @@ static void blink(uint32_t ms) {
 }
 
 int main() {
+  // Pump pin first: it must be in the "off" state as early as possible.
+  pomp_pin_init();
+
   stdio_init_all();
   multicore_launch_core1(core1_entry);
 
-  static uint8_t canvas[EPD_2_13_WIDTH * EPD_2_13_HEIGHT / 4] = {0};
-  epd_t epd = epd_create(8);
+  static uint8_t canvas[EPD_2_13_CANVAS_SIZE] = {0};
+  epd_t epd = epd_create(EPD_DC_PIN);
+  hard_assert(epd_canvas_size(&epd) <= sizeof(canvas));
 
-  epd_init(&epd);
+  if (!epd_init(&epd)) {
+    printf("ERROR: EPD init timed out (BUSY stuck).\n");
+  }
 
   gpio_init(PICO_DEFAULT_LED_PIN);
   gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
@@ -256,18 +411,6 @@ int main() {
                                                POWMAN_POWER_DOMAIN_XIP_CACHE);
 
   humidity_sensor_init(HUMIDITY_GPIO);
-
-  // Latch the "pump off" level before enabling the output driver so an
-  // active-low relay does not click on at boot.
-  gpio_init(POMP_PIN);
-  gpio_put(POMP_PIN, USE_RELAY_GND_ON);
-  gpio_set_dir(POMP_PIN, GPIO_OUT);
-
-#if USE_RELAY_GND_ON
-  gpio_pull_up(POMP_PIN);
-#else
-  gpio_pull_down(POMP_PIN);
-#endif
 
   gpio_init(WAKEUP_GPIO);
   gpio_set_dir(WAKEUP_GPIO, GPIO_IN);
@@ -289,70 +432,95 @@ int main() {
   setup_rtc();
 #endif
 
+  // Release the wake line early; the pump is only allowed if this worked.
+  bool alarms_ok = clear_alarm_flags();
+
   ds3231_datetime_t now;
-
   char buffer[32] = {0};
-  ds3231_read_time(&now);
-
-  snprintf(buffer, sizeof(buffer), "%02d-%02d-%02d", now.day, now.month,
-           now.year);
+  bool rtc_ok = ds3231_read_time(&now);
 
   draw_text(&epd, 0, 0, "Last update:", FONT_TAHOMA_8, BLACK, 3, canvas);
-  draw_text(&epd, 0, 15, buffer, FONT_TAHOMA_16, BLACK, 3, canvas);
 
-  snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", now.hour, now.min,
-           now.sec);
+  if (rtc_ok) {
+    snprintf(buffer, sizeof(buffer), "%02d-%02d-%02d", now.day, now.month,
+             now.year);
+    draw_text(&epd, 0, 15, buffer, FONT_TAHOMA_16, BLACK, 3, canvas);
 
-  draw_text(&epd, 0, 40, buffer, FONT_TAHOMA_16, BLACK, 3, canvas);
+    snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", now.hour, now.min,
+             now.sec);
+    draw_text(&epd, 0, 40, buffer, FONT_TAHOMA_16, BLACK, 3, canvas);
+  } else {
+    printf("ERROR: Failed to read RTC time.\n");
+    draw_text(&epd, 0, 15, "RTC ERROR", FONT_TAHOMA_16, BLACK, 3, canvas);
+  }
 
 #ifdef DEBUG
   printf("Current RTC time: %02d-%02d-%02d %02d:%02d:%02d\n", now.day,
          now.month, now.year, now.hour, now.min, now.sec);
   while (true) {
-    const uint16_t raw = read_humidity_raw();
-    float humidity = raw_to_humidity(raw);
+    soil_reading_t soil = read_soil();
+    float humidity = raw_to_humidity(soil.raw);
 
-    snprintf(buffer, sizeof(buffer), "%.2f%%", humidity);
-
-    printf("Raw humidity sensor value: %d\n", raw);
-    printf("Humidity: %s\n", buffer);
+    printf("Raw humidity sensor value: %d (%s)\n", soil.raw,
+           soil.ok ? "ok" : "SENSOR FAULT");
+    printf("Humidity: %.2f%%\n", humidity);
 
     sleep_ms(1000);
   }
 #endif
 
-  const uint16_t raw = read_humidity_raw();
-  float humidity = raw_to_humidity(raw);
+  soil_reading_t soil = read_soil();
+  float humidity = raw_to_humidity(soil.raw);
 
-  snprintf(buffer, sizeof(buffer), "%.2f%%", humidity);
-  draw_text(&epd, 10, 120, buffer, FONT_TAHOMA_24, BLACK, 3, canvas);
+  if (soil.ok) {
+    snprintf(buffer, sizeof(buffer), "%.2f%%", humidity);
+    draw_text(&epd, 10, 120, buffer, FONT_TAHOMA_24, BLACK, 3, canvas);
+  } else {
+    printf("ERROR: Soil sensor fault (raw=%d).\n", soil.raw);
+    draw_text(&epd, 0, 120, "SENSOR", FONT_TAHOMA_16, BLACK, 3, canvas);
+    draw_text(&epd, 0, 142, "ERROR", FONT_TAHOMA_16, BLACK, 3, canvas);
+  }
 
-  snprintf(buffer, sizeof(buffer), "%d", raw);
+  // Decide whether to water. Every failure mode fails safe: no pumping.
+  uint32_t now_min = 0;
+  bool time_ok = rtc_ok && datetime_to_minutes(&now, &now_min);
+  uint32_t run_ms = 0;
+  const char *pomp_status = "Pump: off";
+
+  if (soil.ok && humidity < MIN_HUMIDITY) {
+    if (!alarms_ok || !time_ok) {
+      pomp_status = "Pump: RTC err";
+    } else if (pomp_ran_recently(now_min)) {
+      pomp_status = "Pump: wait";
+    } else {
+      run_ms = TIME_POMP_ON;
+      remember_pomp_run(now_min);
+      snprintf(buffer, sizeof(buffer), "Pump: %ds", TIME_POMP_ON / 1000);
+      pomp_status = buffer;
+    }
+  }
+
+  printf("%s\n", pomp_status);
+  draw_text(&epd, 0, 180, pomp_status, FONT_TAHOMA_8, BLACK, 3, canvas);
+
+  // Run the pump on core 1 while core 0 refreshes the display.
+  multicore_fifo_push_blocking(run_ms);
+
+  snprintf(buffer, sizeof(buffer), "%d", soil.raw);
   draw_text(&epd, 0, 200, buffer, FONT_TAHOMA_8, BLACK, 3, canvas);
 
   float temperature = read_onboard_temperature(true);
 
   snprintf(buffer, sizeof(buffer), "%.2f", temperature);
 
-  draw_text(&epd, 0, 240, "Temperature:", FONT_TAHOMA_8, BLACK, 3, canvas);
-  draw_text(&epd, 90, 240, buffer, FONT_TAHOMA_8, BLACK, 3, canvas);
+  draw_text(&epd, 0, 236, "Temperature:", FONT_TAHOMA_8, BLACK, 3, canvas);
+  draw_text(&epd, 90, 236, buffer, FONT_TAHOMA_8, BLACK, 3, canvas);
 
-  // Send humidity to core 1 to run pump in parallel
-  uint32_t humidity_raw;
-  memcpy(&humidity_raw, &humidity, sizeof(float));
-  multicore_fifo_push_blocking(humidity_raw);
-
-  epd_display(&epd, canvas);
-  epd_sleep(&epd);
-
-  if (ds3231_check_alarm_flag(ALARM_1)) {
-    printf("<<<<< ALARM 1 TRIGGERED! >>>>>\n");
-    ds3231_clear_alarm_flag(ALARM_1);
+  if (!epd_display(&epd, canvas)) {
+    printf("ERROR: EPD refresh timed out.\n");
   }
-
-  if (ds3231_check_alarm_flag(ALARM_2)) {
-    printf("<<<<< ALARM 2 TRIGGERED! >>>>>\n");
-    ds3231_clear_alarm_flag(ALARM_2);
+  if (!epd_sleep(&epd)) {
+    printf("ERROR: EPD sleep timed out.\n");
   }
 
   // Wait for core 1 pump to finish before powering off

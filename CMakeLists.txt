@@ -36,6 +36,8 @@ add_subdirectory(lib/pico-epd-driver/src/epd_2_13)
 include_directories(lib/pico-epd-driver/src/epd_2_13)
 
 add_subdirectory(lib/pico-epd-driver/src/canvas)
+# Only compile the fonts main.c uses (saves flash).
+target_compile_definitions(canvas PUBLIC CANVAS_SELECT_FONTS USE_FONT_TAHOMA_8 USE_FONT_TAHOMA_16 USE_FONT_TAHOMA_24)
 include_directories(lib/pico-epd-driver/src/canvas)
 
 add_executable(${CMAKE_PROJECT_NAME} main.c)
