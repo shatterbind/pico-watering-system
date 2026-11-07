@@ -27,6 +27,23 @@
 #define USE_RELAY_GND_ON true
 
 #define TEMP_SENSOR_CHANNEL 4
+
+/* =========================================================================
+ * Supply voltage (VSYS) measurement
+ * The Pico 2 has an on-board 200k/100k divider from VSYS to GP29 (ADC3),
+ * so ADC3 reads VSYS / 3.
+ * ========================================================================= */
+#define VSYS_ADC_GPIO 29
+#define VSYS_ADC_CHANNEL 3
+#define VSYS_DIVIDER 3.0f
+#define VSYS_SAMPLES 16
+
+// Li-ion thresholds (single cell, measured at rest before the pump runs).
+// Above VSYS_USB_V the board is assumed to be on USB / external 5 V.
+#define VSYS_USB_V 4.40f
+#define BATTERY_3_BARS_V 3.95f // ~70-100 %
+#define BATTERY_2_BARS_V 3.75f // ~40-70 %
+#define BATTERY_1_BAR_V 3.55f  // ~10-40 %, below: empty, charge now
 #define WAKEUP_GPIO 15
 
 static powman_power_state off_state = POWMAN_POWER_STATE_NONE;
@@ -37,8 +54,26 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 #define I2C_SDA_PIN 21
 
 #define CONFIGURE_RTC 1
-#define CONFIGURE_ALARM_1 1
-#define CONFIGURE_ALARM_2 0
+
+/* =========================================================================
+ * Wake-up schedule (DS3231 Alarm 1)
+ * The board wakes every WAKE_INTERVAL_DAYS days + WAKE_INTERVAL_HOURS hours,
+ * always on the full hour (hh:00:00). Each wake schedules the next one.
+ * Total interval: 1 hour .. 27 days (Alarm 1 matches day-of-month, so the
+ * interval must be shorter than the shortest month).
+ * ========================================================================= */
+#define WAKE_INTERVAL_DAYS 0
+#define WAKE_INTERVAL_HOURS 1
+
+#define WAKE_INTERVAL_TOTAL_HOURS                                              \
+  (WAKE_INTERVAL_DAYS * 24 + WAKE_INTERVAL_HOURS)
+
+_Static_assert(WAKE_INTERVAL_DAYS >= 0 && WAKE_INTERVAL_HOURS >= 0,
+               "Wake interval must not be negative");
+_Static_assert(WAKE_INTERVAL_TOTAL_HOURS >= 1,
+               "Wake interval must be at least 1 hour");
+_Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
+               "Wake interval must be shorter than 28 days");
 
 // #define DEBUG
 
@@ -56,9 +91,18 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 #define CANVAS_BUFFER_SIZE (((EPD_2_13_WIDTH * 2 + 7) / 8) * EPD_2_13_HEIGHT)
 
 // Battery Slot
-#define SLOT_BATTERY_X 86
-#define SLOT_BATTERY_Y 4
-#define BATTERY_STATUS_TEXT "3.85V"
+#define SLOT_BATTERY_X 90
+#define SLOT_BATTERY_Y 5
+
+// Battery icon drawn in the template at (66, 6), 17x9 px with 3 empty bar
+// slots (see generate_watering_template.py: draw_battery_icon).
+#define BATTERY_ICON_X 66
+#define BATTERY_ICON_Y 6
+#define BATTERY_BAR_X0 (BATTERY_ICON_X + 2)
+#define BATTERY_BAR_Y0 (BATTERY_ICON_Y + 2)
+#define BATTERY_BAR_STEP 4
+#define BATTERY_BAR_WIDTH 3
+#define BATTERY_BAR_HEIGHT 5
 
 // Plant Hero Card
 #define SLOT_PLANT_NAME_X 12
@@ -71,7 +115,6 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 
 #define SLOT_PLANT_ZONE_X 12
 #define SLOT_PLANT_ZONE_Y 64
-#define PLANT_ZONE_TEXT "Zone 1 - Auto"
 
 // Soil Moisture Card
 #define SLOT_MOISTURE_PCT_X 42
@@ -102,7 +145,7 @@ static powman_power_state on_state = POWMAN_POWER_STATE_NONE;
 
 #define SLOT_FOOTER_CYCLE_X 30
 #define SLOT_FOOTER_CYCLE_Y 235
-#define FOOTER_CYCLE_TEXT "Alarm: 1h cycle"
+#define FOOTER_CYCLE_FORMAT "Alarm: %s cycle" // %s = e.g. "1h", "2d", "1d 6h"
 
 static int enter_power_off_state(void) {
   stdio_flush();
@@ -135,6 +178,48 @@ void humidity_sensor_init(uint gpio) {
   adc_init();
   adc_set_temp_sensor_enabled(true);
   adc_gpio_init(gpio);
+  adc_gpio_init(VSYS_ADC_GPIO);
+}
+
+/** Supply voltage on VSYS in volts (averaged). */
+static float read_vsys(void) {
+  adc_select_input(VSYS_ADC_CHANNEL);
+
+  uint32_t sum = 0;
+  for (int i = 0; i < VSYS_SAMPLES; i++) {
+    sum += adc_read();
+  }
+
+  return ((float)sum / VSYS_SAMPLES) * ADC_CONVERSION_FACTOR * VSYS_DIVIDER;
+}
+
+/** Number of battery bars (0-3) for a single Li-ion cell voltage. */
+static int battery_bars(float vsys) {
+  if (vsys >= BATTERY_3_BARS_V) return 3; // also USB power
+  if (vsys >= BATTERY_2_BARS_V) return 2;
+  if (vsys >= BATTERY_1_BAR_V) return 1;
+  return 0;
+}
+
+static void draw_battery(epd_t *epd, float vsys, uint8_t *canvas) {
+  const int bars = battery_bars(vsys);
+  // Same colors as the template preview: yellow when >1 bar, red when low.
+  const color_t bar_color = bars > 1 ? BLACK : RED;
+
+  for (int i = 0; i < bars; i++) {
+    fill_rect(epd, BATTERY_BAR_X0 + i * BATTERY_BAR_STEP, BATTERY_BAR_Y0,
+              BATTERY_BAR_WIDTH, BATTERY_BAR_HEIGHT, bar_color, canvas);
+  }
+
+  char text[8];
+  if (vsys >= VSYS_USB_V) {
+    snprintf(text, sizeof(text), "USB");
+  } else {
+    snprintf(text, sizeof(text), "%.2fV", vsys);
+  }
+
+  draw_text_with_bg(epd, SLOT_BATTERY_X, SLOT_BATTERY_Y, text, FONT_TAHOMA_8,
+                    bars <= 1 ? RED : BLACK, 1, WHITE, canvas);
 }
 
 void pomp(float humidity) {
@@ -176,9 +261,22 @@ static uint16_t read_humiduty() {
   return raw;
 }
 
-static int setup_rtc(void) {
-  printf("Setting RTC time from PC compile time...\n");
+/** Sortable key for comparing two RTC date/times (2000-2099). */
+static uint64_t datetime_key(const ds3231_datetime_t *dt) {
+  return ((uint64_t)dt->year << 40) | ((uint64_t)dt->month << 32) |
+         ((uint64_t)dt->day << 24) | ((uint64_t)dt->hour << 16) |
+         ((uint64_t)dt->min << 8) | dt->sec;
+}
 
+/**
+ * Sets the RTC from the firmware compile time, but only when the RTC has lost
+ * its time: the oscillator-stop flag is set (new module, dead coin cell) or
+ * the RTC is behind the compile time (first boot after flashing).
+ *
+ * Every wake is a full reboot, so writing the time unconditionally would roll
+ * the clock back to the compile time on every wake.
+ */
+static void setup_rtc(void) {
   struct tm compile_tm = {0};
 
   sscanf(__DATE__, "%*s %d %d", &compile_tm.tm_mday, &compile_tm.tm_year);
@@ -214,45 +312,78 @@ static int setup_rtc(void) {
       .min = (uint8_t)now_tm->tm_min,
       .sec = (uint8_t)now_tm->tm_sec};
 
-  if (ds3231_set_time(&dt_to_set)) {
+  bool osc_stopped = false;
+  ds3231_datetime_t current = {0};
+
+  // If the RTC can't be read, don't write either: a transient I2C error must
+  // not roll a good clock back to the compile time.
+  if (!ds3231_oscillator_stopped(&osc_stopped) ||
+      !ds3231_read_time(&current)) {
+    printf("ERROR: Failed to read RTC, time not changed.\n");
+    return;
+  }
+
+  const bool behind = datetime_key(&current) < datetime_key(&dt_to_set);
+
+  if (!osc_stopped && !behind) {
+    return; // RTC keeps its own time
+  }
+
+  printf("RTC %s, setting it from compile time...\n",
+         osc_stopped ? "lost power" : "is behind compile time");
+
+  if (ds3231_set_time(&dt_to_set) && ds3231_clear_oscillator_stop_flag()) {
     printf("Time set successfully!\n");
   } else {
     printf("ERROR: Failed to set time.\n");
   }
+}
 
-#if CONFIGURE_ALARM_1
+/**
+ * Arms Alarm 1 for the next wake: the current hour rounded down to hh:00:00
+ * plus WAKE_INTERVAL_TOTAL_HOURS. If the RTC time is unknown, falls back to
+ * waking at the next full hour so the board never sleeps forever.
+ */
+static void schedule_next_alarm(const ds3231_datetime_t *now, bool now_ok) {
+  ds3231_alarm_time_t alarm = {.day = 1, .hour = 0, .min = 0, .sec = 0};
+  ds3231_alarm1_mode_t mode = ALARM1_MINUTES_SECONDS_MATCH; // fallback: hourly
 
-  ds3231_alarm_time_t alarm_1 = {.day = 0, .hour = 0, .min = 0, .sec = 0};
+  if (now_ok) {
+    struct tm next = {.tm_year = now->year + 100, // years since 1900
+                      .tm_mon = now->month - 1,
+                      .tm_mday = now->day,
+                      .tm_hour = now->hour + WAKE_INTERVAL_TOTAL_HOURS,
+                      .tm_min = 0,
+                      .tm_sec = 0,
+                      .tm_isdst = 0};
+    mktime(&next); // normalizes hour/day/month overflow
 
-  printf(
-      "Setting Alarm 1 to trigger when day=%d hour=%d minute=%d second=%d.\n",
-      alarm_1.day, alarm_1.hour, alarm_1.min, alarm_1.sec);
+    alarm.day = (uint8_t)next.tm_mday;
+    alarm.hour = (uint8_t)next.tm_hour;
+    mode = ALARM1_DATE_H_M_S_MATCH;
+  }
 
-  if (ds3231_set_alarm1(&alarm_1, ALARM1_MINUTES_SECONDS_MATCH)) {
-    printf("Alarm 1 configured successfully.\n");
+  // Only Alarm 1 is used. Make sure Alarm 2 can't pull the wake line low
+  // (e.g. if it was enabled on this module by older firmware).
+  ds3231_disable_alarm(ALARM_2);
+
+  if (ds3231_set_alarm1(&alarm, mode)) {
+    printf("Next wake: day %d, %02d:00:00%s\n", alarm.day, alarm.hour,
+           now_ok ? "" : " (fallback: next full hour)");
   } else {
     printf("ERROR: Failed to configure Alarm 1.\n");
   }
+}
 
+/** Formats the wake interval as "1h", "2d" or "1d 6h". */
+static void format_wake_interval(char *out, size_t size) {
+#if WAKE_INTERVAL_DAYS > 0 && WAKE_INTERVAL_HOURS > 0
+  snprintf(out, size, "%dd %dh", WAKE_INTERVAL_DAYS, WAKE_INTERVAL_HOURS);
+#elif WAKE_INTERVAL_DAYS > 0
+  snprintf(out, size, "%dd", WAKE_INTERVAL_DAYS);
+#else
+  snprintf(out, size, "%dh", WAKE_INTERVAL_HOURS);
 #endif
-
-#if CONFIGURE_ALARM_2
-
-  ds3231_alarm_time_t alarm_2 = {.day = 0, .hour = 0, .min = 18};
-
-  printf("Setting Alarm 2 to trigger when day=%d hour=%d minute=%d.\n",
-         alarm_2.day, alarm_2.hour, alarm_2.min);
-
-  if (ds3231_set_alarm2(&alarm_2, ALARM2_MINUTES_MATCH)) {
-    printf("Alarm 2 configured successfully.\n");
-  } else {
-    printf("ERROR: Failed to configure Alarm 2.\n");
-  }
-
-#endif
-
-  printf("RTC configure for interrupt mode.\n");
-  ds3231_enable_interrupt_mode();
 }
 
 static void blink(uint32_t ms) {
@@ -311,11 +442,14 @@ int main() {
 #endif
 
   ds3231_datetime_t now = {0};
-  ds3231_read_time(&now);
+  const bool now_ok = ds3231_read_time(&now);
+  schedule_next_alarm(&now, now_ok);
 
   const uint16_t raw = read_humiduty();
   float humidity = (AIR_VALUE - raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
   float temperature = read_onboard_temperature(true);
+  // Read before the pump starts so the motor load doesn't drag VSYS down.
+  float vsys = read_vsys();
 
   char buffer[32] = {0};
 
@@ -331,6 +465,8 @@ int main() {
 
     printf("Raw humidity sensor value: %d\n", dbg_raw);
     printf("Humidity: %s\n", buffer);
+    printf("VSYS: %.2f V (%d bars)\n", read_vsys(),
+           battery_bars(read_vsys()));
 
     sleep_ms(1000);
   }
@@ -341,16 +477,13 @@ int main() {
              WATERING_TEMPLATE_HEIGHT, canvas);
 
   // 2. Battery / Power slot (top right)
-  draw_text_with_bg(&epd, SLOT_BATTERY_X, SLOT_BATTERY_Y, BATTERY_STATUS_TEXT,
-                    FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
+  draw_battery(&epd, vsys, canvas);
 
   // 3. Plant Identity (Hero card)
   draw_text_with_bg(&epd, SLOT_PLANT_NAME_X, SLOT_PLANT_NAME_Y, PLANT_NAME_TEXT,
                     FONT_TAHOMA_12, BLACK, 1, WHITE, canvas);
   draw_text_with_bg(&epd, SLOT_PLANT_SUB_X, SLOT_PLANT_SUB_Y, PLANT_SUB_TEXT,
                     FONT_TAHOMA_8, RED, 1, WHITE, canvas);
-  draw_text_with_bg(&epd, SLOT_PLANT_ZONE_X, SLOT_PLANT_ZONE_Y, PLANT_ZONE_TEXT,
-                    FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
 
   // 4. Soil Moisture card
   int moisture_pct = (int)humidity;
@@ -385,8 +518,11 @@ int main() {
            now.hour, now.min);
   draw_text_with_bg(&epd, SLOT_FOOTER_TIME_X, SLOT_FOOTER_TIME_Y, buffer,
                     FONT_TAHOMA_8, RED, 1, WHITE, canvas);
-  draw_text_with_bg(&epd, SLOT_FOOTER_CYCLE_X, SLOT_FOOTER_CYCLE_Y,
-                    FOOTER_CYCLE_TEXT, FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
+  char interval[12];
+  format_wake_interval(interval, sizeof(interval));
+  snprintf(buffer, sizeof(buffer), FOOTER_CYCLE_FORMAT, interval);
+  draw_text_with_bg(&epd, SLOT_FOOTER_CYCLE_X, SLOT_FOOTER_CYCLE_Y, buffer,
+                    FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
 
   // Send humidity to core 1 to run pump in parallel
   uint32_t humidity_raw;
@@ -399,11 +535,6 @@ int main() {
   if (ds3231_check_alarm_flag(ALARM_1)) {
     printf("<<<<< ALARM 1 TRIGGERED! >>>>>\n");
     ds3231_clear_alarm_flag(ALARM_1);
-  }
-
-  if (ds3231_check_alarm_flag(ALARM_2)) {
-    printf("<<<<< ALARM 2 TRIGGERED! >>>>>\n");
-    ds3231_clear_alarm_flag(ALARM_2);
   }
 
   // Wait for core 1 pump to finish before powering off
