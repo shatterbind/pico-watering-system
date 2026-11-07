@@ -1,0 +1,8 @@
+[submodule "lib/pico-ds3231"]
+	path = lib/pico-ds3231
+	url = https://github.com/shatterbind/pico-ds3231
+	branch = main
+[submodule "lib/pico-epd-driver"]
+	path = lib/pico-epd-driver
+	url = https://github.com/shatterbind/pico-epd-driver
+	branch = main
