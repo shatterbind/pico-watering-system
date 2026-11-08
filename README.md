@@ -1,115 +1,238 @@
 # pico-watering-system
 
-Simple Raspberry Pi Pico W automatic watering controller example. Includes wiring diagrams (ASCII + Mermaid) and sample MicroPython code to read a soil moisture sensor and drive a pump through a relay.
+Low-power automatic plant watering controller for the **Raspberry Pi Pico 2 (RP2350)**, written in C on the Pico SDK.
 
-## Parts
-- Raspberry Pi Pico W
-- Relay module (5V) or MOSFET + flyback diode if using DC pump
-- Small water pump (use appropriate voltage/current supply)
-- Soil moisture sensor (analog)
-- External 5V power supply for pump/relay
-- Jumper wires, breadboard
+The board spends almost all its time powered off. A DS3231 RTC alarm wakes it at a configurable interval (hours and/or days). It then reads a capacitive soil-moisture sensor, runs the pump if the soil is too dry, refreshes a 2.13" 4-color e-paper dashboard, and powers itself off again. It runs from USB or a single Li-ion cell and shows the battery level.
 
-## Wiring (summary)
-- Never drive the pump directly from the Pico. Use a relay or transistor and an external power supply.
-- Connect grounds: Pico GND and external power supply GND must be common.
+## How it works
 
-Example pin mapping used in the sample code:
+Every wake is a full reboot, so `main()` runs from the top once per wake:
+
+1. **Pump off.** The pump pin is the first thing set up, latched to "off" before it becomes an output, so the relay never pulses at boot.
+2. **RTC.** The RTC is set from the firmware compile time **only** if the DS3231 oscillator-stop flag is set (new module, dead coin cell) or the RTC is behind the compile time (first boot after flashing). If the RTC can't be read, the time is left alone.
+3. **Next wake.** Alarm 1 is armed for the current hour (rounded down to `hh:00:00`) plus `WAKE_INTERVAL_DAYS` / `WAKE_INTERVAL_HOURS`, using a date + time match. If the RTC can't be read, it falls back to the next full hour, so the board never sleeps forever. Alarm 2 is not used and is disabled on the module.
+4. **Measure.**
+   - Soil: 16 samples on `ADC0 / GP26`, averaged and mapped to 0–100 % using `AIR_VALUE` and `WATER_VALUE`.
+   - Supply: `VSYS` on `ADC3 / GP29` (the Pico 2's on-board 1/3 divider), read before the pump starts.
+   - Temperature: the RP2350's on-chip sensor (chip temperature, not true room temperature).
+5. **Decide.** Core 0 decides once (`decide_pomp()`): water if the reading is valid, moisture is below `MIN_HUMIDITY`, this boot wasn't a brown-out reset, and VSYS is at least `MIN_POMP_VSYS_V`. It sends the pump run time (`TIME_POMP_ON` ms, or 0) to core 1 through the multicore FIFO.
+6. **Water + display.** Core 1 runs the pump while core 0 draws and refreshes the e-paper.
+7. **Sleep.** Core 0 clears the alarm flag (releasing the `INT/SQW` wake line), waits for the pump to finish, and enters the `powman` power-off state. The low level on `GP15` at the next alarm wakes it.
+
+### When the pump does *not* run
+
+- **Moist enough.** Moisture is at or above `MIN_HUMIDITY`. The display shows `OPTIMAL`.
+- **Sensor fault.** The averaged reading is below `SENSOR_MIN_RAW` (shorted or disconnected), or the 16 samples spread by more than `SENSOR_MAX_SPREAD` (floating wire). The display shows `SENSOR ERR` and `--%`.
+- **Brown-out restart** (`SKIP_POMP_AFTER_BROWNOUT`). The soil is dry, but this boot was caused by a brown-out reset (`BOR`). The likely cause is the pump's own start-up current on a weak battery; starting it again would reset the board again, in a loop. The display shows `SKIP: BOR`; the next normal alarm wake tries again.
+- **Battery too low** (`MIN_POMP_VSYS_V`). The soil is dry, but VSYS measured at rest is below the limit. The display shows `LOW BATTERY`. On USB (VSYS ~4.7 V) this never triggers.
+
+## Display
+
+![Dashboard layout](lib/pico-epd-driver/assets/watering_template.png)
+
+The static background (cards, icons, moisture bar frame) is an image in the driver: `lib/pico-epd-driver/src/canvas/images/watering_template.h`. All text is drawn by the firmware on top of it, in one font family (the driver's Tahoma bitmap font) in three sizes:
+
+| Area | Content |
+| --- | --- |
+| Header | `HEADER_TITLE_TEXT`, battery icon with 0–3 bars, battery voltage or `USB` |
+| Plant | `PLANT_NAME_TEXT` (medium), `PLANT_SUB_TEXT` (small, red) |
+| Soil moisture | Moisture % (large), raw ADC value (small, right), status, filled bar (red below `MIN_HUMIDITY`, yellow above), DRY / OK / WET scale |
+| Temperature | Chip temperature, e.g. `21.1°C` |
+| Last refresh | Date and time of this wake (`MM-DD HH:MM`), reset reason code (red, right; only when the boot wasn't a normal alarm wake), wake interval (`Cycle: 1h`, `Cycle: 1d 12h`) |
+
+The status describes what this wake **did**, so it stays correct until the next refresh:
+
+| Status | Meaning |
+| --- | --- |
+| `WATERED 5s` (red) | The pump ran for `TIME_POMP_ON` |
+| `OPTIMAL` | No watering needed |
+| `SENSOR ERR` (red) | Invalid sensor reading, pump not run |
+| `SKIP: BOR` (red) | Dry, but the board just restarted from a brown-out, pump not run |
+| `LOW BATTERY` (red) | Dry, but the battery is below `MIN_POMP_VSYS_V`, pump not run |
+
+The moisture % and bar show the reading taken **before** watering. The raw value (averaged ADC reading, 0–4095) is shown in every state, including `SENSOR ERR`, so you can calibrate `AIR_VALUE` / `WATER_VALUE` and diagnose sensor faults without `DEBUG`.
+
+### Reset reason
+
+On every boot the firmware reads the RP2350's `POWMAN_LAST_SWCORE_PWRUP` (what powered the core up) and `POWMAN_CHIP_RESET` (cause of the last chip reset). A normal wake by the DS3231 alarm shows nothing; anything else shows a code in the footer, next to the time, until the next wake:
+
+| Code | Cause |
+|---|---|
+| *(none)* | Normal RTC alarm wake on GP15 |
+| `BOR` | **Brown-out**: the supply dropped too low, e.g. the pump's start-up current on a weak battery |
+| `POR` | Power-on (power connected) |
+| `RST` | RUN pin pulled low (reset button) |
+| `WDT` | Watchdog; also shown once after flashing a `.uf2` |
+| `GLT` | Glitch detector |
+| `DBG` | Debugger or software reset request |
+| `WK` | Another powman wake source (GPIO wake 1–3 or timer) |
+
+The codes and texts are `RESET_CODE_*` / `RESET_TEXT_*` defines in `main.c`, each with a comment; set a code to `""` to hide it on the display. The serial output prints the full reason and both raw register values on every boot, e.g. `Boot: BOR - brown-out: supply dropped too low (CHIP_RESET=0x00020000, LAST_SWCORE_PWRUP=0)`. Only the latest reset is recorded: the chip keeps no history, and a brown-out also clears the POWMAN scratch registers. The brown-out detector watches the chip's internal core supply, not the battery; use the VSYS reading for the battery voltage.
+
+### Battery (single Li-ion cell on VSYS)
+
+| VSYS | Bars | Approx. charge |
+| --- | --- | --- |
+| ≥ 4.40 V | 3, text `USB` | On USB / 5 V |
+| ≥ 3.95 V | 3 | 70–100 % |
+| ≥ 3.75 V | 2 | 40–70 % |
+| ≥ 3.55 V | 1 (red bar and text) | 10–40 % |
+| < 3.55 V | 0 (red text) | Charge now |
+
+If the cell feeds VSYS through a Schottky diode, VSYS reads 0.2–0.3 V below the cell voltage; lower the thresholds accordingly. The reading uses the 3.3 V rail as reference (about ±2–3 %).
+
+## Hardware
+
+| Part | Notes |
+| --- | --- |
+| Raspberry Pi Pico 2 | `PICO_BOARD pico2` |
+| DS3231 RTC module | I2C0, with a backup coin cell |
+| 2.13" SPI e-paper, 122×250, black/white/yellow/red | Driver: [pico-epd-driver](https://github.com/shatterbind/pico-epd-driver) |
+| Capacitive soil-moisture sensor | Analog output |
+| Relay module or MOSFET + flyback diode | Drives the pump |
+| Small DC pump + external supply | Never power the pump from the Pico |
+| Optional: single-cell Li-ion battery | On VSYS, with a charger/protection board |
+| Optional: Schottky diode (e.g. 1N5817, SS14) | Between the battery and VSYS, see below |
+
+## Pinout
+
+| Signal | Pico pin |
+| --- | --- |
+| Soil sensor AOUT | GP26 (ADC0) |
+| Supply voltage | GP29 (ADC3, on-board VSYS/3 divider, no wiring needed) |
+| Pump relay IN | GP22 |
+| DS3231 SDA | GP20 (I2C0 SDA) |
+| DS3231 SCL | GP21 (I2C0 SCL) |
+| DS3231 INT/SQW (wake) | GP15 |
+| EPD DC | GP8 |
+| EPD CS | GP9 |
+| EPD CLK | GP10 |
+| EPD MOSI (DIN) | GP11 |
+| EPD RST | GP12 |
+| EPD BUSY | GP13 |
+
+All grounds, including the pump supply's ground, must be common.
+
+### Wiring diagram
+
+![Wiring diagram: Pico 2, e-paper, DS3231, soil sensor, relay, pump and Li-ion cell](docs/wiring.svg)
+
+Pin numbers are the Pico 2's physical pins (USB at the top). 3.3 V comes from the Pico's `3V3` pin (36); the relay coil and the pump run from a separate 5 V supply whose ground joins the common GND. Dashed parts are optional. The diagram is generated by `node docs/gen-wiring.cjs`; edit that script when the wiring changes.
+
+**Schottky diode (optional).** The Pico already has a diode from VBUS (USB) to VSYS. Add a second one from the battery to VSYS when USB and the battery can be connected at the same time: then whichever supply is higher powers the board, and USB can't push current back into the battery outside its charger. You can leave it out when the board runs only from the battery, or when your charger board has a load-sharing / power-path output. With the diode, VSYS reads about 0.2–0.3 V below the cell voltage (see Battery above).
+
+## Configuration (`main.c`)
+
+### Watering and sensor
+
+| Define | Default | Meaning |
+| --- | --- | --- |
+| `AIR_VALUE` / `WATER_VALUE` | `4095` / `1100` | Raw ADC readings with the sensor in dry air and in water. Calibrate for your sensor (see `DEBUG`). |
+| `MIN_HUMIDITY` | `40` % | Water when moisture is below this value. |
+| `TIME_POMP_ON` | `5000` ms | How long the pump runs per wake. |
+| `SKIP_POMP_AFTER_BROWNOUT` | `1` | Don't run the pump on a boot caused by a brown-out reset. |
+| `MIN_POMP_VSYS_V` | `3.60` V | Don't run the pump when VSYS is below this. `0` disables the check. |
+| `SENSOR_SAMPLES` | `16` | ADC samples averaged per reading. |
+| `SENSOR_MIN_RAW` / `SENSOR_MAX_SPREAD` | `300` / `300` | Sensor fault thresholds (see above). Raise `SENSOR_MAX_SPREAD` if a working sensor shows `SENSOR ERR`. |
+| `POMP_PIN` | `22` | Relay control pin. |
+| `USE_RELAY_GND_ON` | `true` | `true`: the relay is active-LOW. `false`: active-HIGH. |
+
+### Schedule and RTC
+
+| Define | Default | Meaning |
+| --- | --- | --- |
+| `WAKE_INTERVAL_DAYS` / `WAKE_INTERVAL_HOURS` | `0` / `1` | Time between wakes. Wakes always land on a full hour. Must be 1 hour to 27 days (checked at compile time). |
+| `CONFIGURE_RTC` | `1` | Sets the RTC from compile time when it has lost time or is behind (see above). |
+| `COMPILE_UPLOAD_OFFSET_SECONDS` | `6` | Added to the compile time to cover the time between compiling and the board booting. |
+| `DEBUG` | off | Uncomment to loop forever and print RTC time, raw soil value, spread, % and VSYS over USB/UART once per second. Use this to calibrate. |
+
+### Battery
+
+| Define | Default | Meaning |
+| --- | --- | --- |
+| `VSYS_USB_V` | `4.40` V | Above this, the board is on USB and shows `USB`. |
+| `BATTERY_3_BARS_V` / `BATTERY_2_BARS_V` / `BATTERY_1_BAR_V` | `3.95` / `3.75` / `3.55` V | Li-ion bar thresholds. |
+
+### Display text
+
+| Define | Default | Meaning |
+| --- | --- | --- |
+| `HEADER_TITLE_TEXT` | `"shatterbind"` | Top-left title, max ~58 px (a serial warning is printed if it's too wide). |
+| `PLANT_NAME_TEXT` / `PLANT_SUB_TEXT` | `"Indian"` / `"Laurel"` | Plant card. |
+| `STATUS_WATERED_FORMAT` / `STATUS_OPTIMAL_TEXT` / `STATUS_SENSOR_ERROR_TEXT` | `"WATERED %us"` / `"OPTIMAL"` / `"SENSOR ERR"` | Moisture status, max 73 px wide. |
+| `MOISTURE_RAW_LABEL_TEXT` | `"raw"` | Label above the raw ADC value (right column of the moisture card, 23 px wide). |
+| `FOOTER_CYCLE_FORMAT` | `"Cycle: %s"` | Footer interval text; `%s` becomes e.g. `1h`, `2d`, `1d 12h`. |
+| `FONT_SMALL` / `FONT_MEDIUM` / `FONT_LARGE` | Tahoma 8 / 12 / 16 | The three text sizes. Each font must be enabled in `CMakeLists.txt` (`USE_FONT_TAHOMA_*`). |
+
+Positions are the `SLOT_*` and `LABEL_*` defines next to these. Text widths: Tahoma 8 capitals are 8 px high, Tahoma 16 capitals 16 px.
+
+## Calibration
+
+1. Uncomment `#define DEBUG`, build and flash, and open the USB serial port.
+2. Hold the sensor in dry air: note `Raw humidity sensor value` → `AIR_VALUE`.
+3. Put it in water up to its line: note the value → `WATER_VALUE`.
+4. Check the `spread` stays well below `SENSOR_MAX_SPREAD` with the sensor connected.
+5. Compare `VSYS` with a multimeter on the battery.
+6. Comment `DEBUG` out again and rebuild.
+
+## Building
+
+The project uses the Raspberry Pi Pico VS Code extension's toolchain, pinned in `CMakeLists.txt` (SDK 2.2.0, ARM GCC 14.2, picotool 2.2.0-a4). Open the folder in VS Code with the extension installed and it downloads them into `~/.pico-sdk`.
+
+```sh
+git clone --recurse-submodules https://github.com/shatterbind/pico-watering-system
+# or, in an existing clone:
+git submodule update --init
+
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
-Pico W GP15  -> Relay input (active LOW or HIGH depending on module)
-Pico W GP26  -> Soil moisture analog input (ADC0)
-Pico W GND   -> Common ground
-External 5V   -> Pump and relay VCC (relay VCC may need 5V)
-Relay GND     -> Common ground
-Pump +        -> External 5V
-Pump -        -> Relay NO or transistor MOSFET drain
+
+On Windows outside VS Code, put the extension's tools on `PATH` first, e.g. `~/.pico-sdk/cmake/<version>/bin` and `~/.pico-sdk/ninja/<version>`.
+
+Flash `build/pico_watering_system.uf2` by holding BOOTSEL while plugging the board in and copying the file to the drive, or run `picotool load -x build/pico_watering_system.uf2`.
+
+## Libraries (git submodules)
+
+| Path | Library |
+| --- | --- |
+| `lib/pico-ds3231` | DS3231 RTC driver on I2C0. Every I2C call has a timeout. |
+| `lib/pico-epd-driver` | 2.13" e-paper driver, canvas, fonts and the dashboard template. |
+
+```sh
+# Check out the exact commits this repo pins (after a clone or pull):
+git submodule update --init --recursive
+
+# Pull the latest upstream commits of the libraries:
+git submodule update --remote --merge
+
+# Record the new library versions in this repo:
+git add lib
+git commit -m "update modules"
 ```
 
-## Wiring table
-| Component         | Pico pin / Supply       |
-|------------------:|:-----------------------|
-| Relay IN          | GP15                   |
-| Relay VCC         | +5V (external)         |
-| Relay GND         | GND (common)           |
-| Pump +            | +5V (external)         |
-| Pump -            | Relay NO               |
-| Soil sensor Vout  | GP26 (ADC0)            |
-| Soil sensor VCC   | 3.3V (or sensor spec)  |
-| Soil sensor GND   | GND (common)           |
+Check what changed with `git submodule status` or `git diff --submodule`.
 
-## ASCII wiring diagram
-```
-[Pico W]                 [Relay module]         [Pump]      [Power]
-    GP15  --- Relay IN
-    GP26  --- Soil Vout (ADC)
-    3V3   --- Soil VCC
-    GND  ------------------------ GND ---------- GND
-                                                         Relay VCC --- +5V (external)
-Pump + ----------------------- +5V (external)
-Pump - ---------------- Relay NO (or transistor)
-```
+When you change a library (for example the template), commit and **push it inside the submodule first**, then commit the new pointer here. Otherwise a fresh clone points to a commit that doesn't exist on GitHub.
 
-## Mermaid circuit overview (rendered where supported)
-```mermaid
-flowchart LR
-    Pico[Pico W]
-    Relay[Relay Module]
-    Pump[Water Pump]
-    Sensor[Soil Moisture Sensor]
-    PS[External 5V Supply]
+### Changing the dashboard background
 
-    Pico -->|GP15| Relay
-    Pico -->|GP26 (ADC)| Sensor
-    Sensor -->|VCC| Pico
-    Pico -->|GND| Relay
-    PS -->|+5V| Relay
-    PS -->|+5V| Pump
-    Relay -->|NO| Pump
-    Pico -->|GND common| PS
-```
+`lib/pico-epd-driver/scripts/generate_watering_template.py` (Python 3 + Pillow) draws the template and a preview with sample values. It writes `assets/watering_template.png`, `assets/watering_preview.png` and `src/canvas/images/watering_template.h` (2 bits per pixel: black, white, yellow, red). Card positions in the script must match the `SLOT_*` / `LABEL_*` defines in `main.c`.
 
-## MicroPython example
-Save as `main.py` on the Pico W. Adjust pin numbers to match your wiring and relay logic (active LOW vs HIGH).
-```python
-from machine import Pin, ADC
-import time
+## Known limitations
 
-RELAY_PIN = 15      # GP15
-SOIL_ADC_PIN = 26   # GP26 / ADC0
-WATER_THRESHOLD = 2000  # calibrate for your sensor (0-65535 on RP2 port)
+- There is no minimum time between pump runs; the wake interval is the only limit.
+- The moisture % on screen is the reading from before watering.
+- The RTC doesn't follow daylight-saving changes. To reset it, remove the coin cell briefly (sets the oscillator-stop flag) and flash again.
+- The temperature is the RP2350 chip temperature. It reads a few degrees above room temperature right after boot.
+- No tests: hardware behavior can only be checked on the device.
 
-relay = Pin(RELAY_PIN, Pin.OUT)
-soil = ADC(SOIL_ADC_PIN)
+## Safety
 
-def pump_on():
-        # if your relay is active LOW, write 0 to turn on
-        relay.value(0)
+- Use a relay or MOSFET with a flyback diode for the pump, and supply the pump separately.
+- Check that your relay module accepts a 3.3 V logic input.
+- Test with the pump out of the water first, and keep the electronics away from water.
 
-def pump_off():
-        relay.value(1)
+## License
 
-def read_soil():
-        return soil.read_u16()
-
-try:
-        pump_off()
-        while True:
-                moisture = read_soil()
-                print("Soil:", moisture)
-                if moisture < WATER_THRESHOLD:
-                        print("Soil dry -> watering")
-                        pump_on()
-                        time.sleep(5)  # pump run time (seconds)
-                        pump_off()
-                time.sleep(10)
-except KeyboardInterrupt:
-        pump_off()
-```
-
-## Safety & notes
-- Verify relay module voltage requirements (some require 5V VCC and a 3.3V logic input; others may not).
-- Use flyback diodes for inductive loads, fuses, and proper insulation for water and mains.
-- Calibrate WATER_THRESHOLD for your soil sensor and environment.
-- Test with the pump disconnected from water to verify operation before plumbing.
-
-That's all — adjust pins and timing to your needs.
+MIT. See [LICENSE](LICENSE).

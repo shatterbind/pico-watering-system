@@ -36,6 +36,8 @@ add_subdirectory(lib/pico-epd-driver/src/epd_2_13)
 include_directories(lib/pico-epd-driver/src/epd_2_13)
 
 add_subdirectory(lib/pico-epd-driver/src/canvas)
+# Only compile the fonts main.c uses (saves flash).
+target_compile_definitions(canvas PUBLIC CANVAS_SELECT_FONTS USE_FONT_TAHOMA_8 USE_FONT_TAHOMA_12 USE_FONT_TAHOMA_16)
 include_directories(lib/pico-epd-driver/src/canvas)
 
 add_executable(${CMAKE_PROJECT_NAME} main.c)
@@ -45,4 +47,4 @@ pico_enable_stdio_uart(${CMAKE_PROJECT_NAME} 1)
 
 pico_add_extra_outputs(${CMAKE_PROJECT_NAME})
 
-target_link_libraries(${CMAKE_PROJECT_NAME} pico_stdlib pico_multicore ds3231 epd_2_13 canvas common hardware_i2c hardware_spi hardware_pio hardware_adc hardware_interp hardware_adc hardware_xosc hardware_powman hardware_sync)
+target_link_libraries(${CMAKE_PROJECT_NAME} pico_stdlib pico_multicore ds3231 epd_2_13 canvas common hardware_i2c hardware_spi hardware_pio hardware_adc hardware_interp hardware_xosc hardware_powman hardware_sync)

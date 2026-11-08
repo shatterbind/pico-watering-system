@@ -1,0 +1,3 @@
+# The libraries in lib/ are git submodules with their own style (4 spaces,
+# braces on their own line). Don't reformat them from this repo.
+DisableFormat: true
