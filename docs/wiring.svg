@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 800" width="1260" height="800" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="1260" height="800" fill="#fafafa"/>
+<line x1="14" y1="40" x2="1246" y2="40" stroke="#ef6c00" stroke-width="5"/>
+<text x="1242" y="34" font-size="12" font-weight="700" fill="#ef6c00" text-anchor="end">5 V (pump supply)</text>
+<line x1="14" y1="60" x2="1246" y2="60" stroke="#d32f2f" stroke-width="5"/>
+<text x="1242" y="54" font-size="12" font-weight="700" fill="#d32f2f" text-anchor="end">3.3 V</text>
+<line x1="14" y1="80" x2="1246" y2="80" stroke="#212121" stroke-width="5"/>
+<text x="1242" y="74" font-size="12" font-weight="700" fill="#212121" text-anchor="end">GND</text>
+<line x1="14" y1="700" x2="1246" y2="700" stroke="#d32f2f" stroke-width="5"/>
+<text x="1242" y="694" font-size="12" font-weight="700" fill="#d32f2f" text-anchor="end">3.3 V</text>
+<line x1="14" y1="720" x2="1246" y2="720" stroke="#212121" stroke-width="5"/>
+<text x="1242" y="714" font-size="12" font-weight="700" fill="#212121" text-anchor="end">GND</text>
+<polyline points="14,60 14,700" fill="none" stroke="#d32f2f" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="26,80 26,720" fill="none" stroke="#212121" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="630,176 640,176 640,96 310,96 310,168 300,168" fill="none" stroke="#f4511e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="60,198 45,198 45,80" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="45" cy="80" r="5" fill="#212121"/>
+<polyline points="630,202 650,202 650,80" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="650" cy="80" r="5" fill="#212121"/>
+<polyline points="630,254 660,254 660,60" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="660" cy="60" r="5" fill="#d32f2f"/>
+<polyline points="300,410 470,410" fill="none" stroke="#8e24aa" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,436 470,436" fill="none" stroke="#1e88e5" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,462 470,462" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,488 470,488" fill="none" stroke="#fbc02d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,514 470,514" fill="none" stroke="#43a047" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,540 470,540" fill="none" stroke="#6d4c41" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,566 470,566" fill="none" stroke="#757575" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,592 320,592 320,700" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="320" cy="700" r="5" fill="#d32f2f"/>
+<polyline points="700,306 680,306 680,60" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="680" cy="60" r="5" fill="#d32f2f"/>
+<polyline points="700,332 630,332" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="700,384 630,384" fill="none" stroke="#00acc1" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,436 630,436" fill="none" stroke="#ff7043" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,462 630,462" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="920,418 920,40" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="920" cy="40" r="5" fill="#ef6c00"/>
+<polyline points="700,488 630,488" fill="none" stroke="#3949ab" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="700,514 630,514" fill="none" stroke="#00897b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="700,540 665,540 665,700" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="665" cy="700" r="5" fill="#d32f2f"/>
+<polyline points="700,566 680,566 680,720" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="680" cy="720" r="5" fill="#212121"/>
+<polyline points="700,592 695,592 695,752 440,752 440,644 470,644" fill="none" stroke="#c2185b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1060,440 1080,440 1080,40" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1080" cy="40" r="5" fill="#ef6c00"/>
+<polyline points="1060,470 1150,470 1150,530" fill="none" stroke="#5d4037" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1150,590 1150,625 1236,625 1236,80" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1236" cy="80" r="5" fill="#212121"/>
+<polyline points="1120,120 1120,40" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1120" cy="40" r="5" fill="#ef6c00"/>
+<polyline points="1200,120 1200,80" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1200" cy="80" r="5" fill="#212121"/>
+<polygon points="380,86 380,106 398,96" fill="#212121"/><line x1="399" y1="85" x2="399" y2="107" stroke="#212121" stroke-width="3"/>
+<text x="389" y="124" font-size="11" font-weight="400" fill="#1b1b1b" text-anchor="middle">Schottky</text>
+<rect x="470" y="120" width="160" height="552" rx="10" fill="#2e7d32" stroke="#1b5e20" stroke-width="2"/>
+<rect x="530" y="106" width="40" height="22" rx="4" fill="#b0bec5" stroke="#546e7a"/>
+<text x="550" y="146" font-size="10" font-weight="400" fill="#e8f5e9" text-anchor="middle">USB</text>
+<rect x="515" y="360" width="70" height="70" rx="4" fill="#212121"/>
+<text x="550" y="392" font-size="11" font-weight="700" fill="#eee" text-anchor="middle">RP2350</text>
+<text x="550" y="408" font-size="11" font-weight="400" fill="#bbb" text-anchor="middle">Pico 2</text>
+<circle cx="470" cy="150" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="154" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP0</text>
+<text x="460" y="143" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">1</text>
+<circle cx="630" cy="150" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="154" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">VBUS</text>
+<text x="640" y="143" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">40</text>
+<circle cx="470" cy="176" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="180" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP1</text>
+<text x="460" y="169" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">2</text>
+<circle cx="630" cy="176" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="180" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">VSYS</text>
+<text x="640" y="169" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">39</text>
+<circle cx="470" cy="202" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="206" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="460" y="195" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">3</text>
+<circle cx="630" cy="202" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="206" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="640" y="195" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">38</text>
+<circle cx="470" cy="228" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="232" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP2</text>
+<text x="460" y="221" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">4</text>
+<circle cx="630" cy="228" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="232" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">3V3_EN</text>
+<text x="640" y="221" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">37</text>
+<circle cx="470" cy="254" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="258" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP3</text>
+<text x="460" y="247" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">5</text>
+<circle cx="630" cy="254" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="258" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">3V3</text>
+<text x="640" y="247" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">36</text>
+<circle cx="470" cy="280" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="284" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP4</text>
+<text x="460" y="273" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">6</text>
+<circle cx="630" cy="280" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="284" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">ADC_VREF</text>
+<text x="640" y="273" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">35</text>
+<circle cx="470" cy="306" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="310" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP5</text>
+<text x="460" y="299" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">7</text>
+<circle cx="630" cy="306" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="310" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP28</text>
+<text x="640" y="299" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">34</text>
+<circle cx="470" cy="332" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="336" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="460" y="325" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">8</text>
+<circle cx="630" cy="332" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="336" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">AGND</text>
+<text x="640" y="325" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">33</text>
+<circle cx="470" cy="358" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="362" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP6</text>
+<text x="460" y="351" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">9</text>
+<circle cx="630" cy="358" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="362" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP27</text>
+<text x="640" y="351" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">32</text>
+<circle cx="470" cy="384" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="388" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP7</text>
+<text x="460" y="377" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">10</text>
+<circle cx="630" cy="384" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="388" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP26</text>
+<text x="640" y="377" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">31</text>
+<circle cx="470" cy="410" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="414" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP8</text>
+<text x="460" y="403" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">11</text>
+<circle cx="630" cy="410" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="414" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">RUN</text>
+<text x="640" y="403" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">30</text>
+<circle cx="470" cy="436" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="440" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP9</text>
+<text x="460" y="429" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">12</text>
+<circle cx="630" cy="436" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="440" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP22</text>
+<text x="640" y="429" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">29</text>
+<circle cx="470" cy="462" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="466" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="460" y="455" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">13</text>
+<circle cx="630" cy="462" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="466" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="640" y="455" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">28</text>
+<circle cx="470" cy="488" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="492" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP10</text>
+<text x="460" y="481" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">14</text>
+<circle cx="630" cy="488" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="492" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP21</text>
+<text x="640" y="481" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">27</text>
+<circle cx="470" cy="514" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="518" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP11</text>
+<text x="460" y="507" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">15</text>
+<circle cx="630" cy="514" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="518" font-size="11" font-weight="700" fill="#ffffff" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP20</text>
+<text x="640" y="507" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">26</text>
+<circle cx="470" cy="540" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="544" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP12</text>
+<text x="460" y="533" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">16</text>
+<circle cx="630" cy="540" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="544" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP19</text>
+<text x="640" y="533" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">25</text>
+<circle cx="470" cy="566" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="570" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP13</text>
+<text x="460" y="559" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">17</text>
+<circle cx="630" cy="566" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="570" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP18</text>
+<text x="640" y="559" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">24</text>
+<circle cx="470" cy="592" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="596" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="460" y="585" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">18</text>
+<circle cx="630" cy="592" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="596" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GND</text>
+<text x="640" y="585" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">23</text>
+<circle cx="470" cy="618" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="622" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP14</text>
+<text x="460" y="611" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">19</text>
+<circle cx="630" cy="618" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="622" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP17</text>
+<text x="640" y="611" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">22</text>
+<circle cx="470" cy="644" r="6" fill="#ffd54f" stroke="#795548" stroke-width="1.5"/>
+<text x="481" y="648" font-size="11" font-weight="700" fill="#ffffff" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GP15</text>
+<text x="460" y="637" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="end">20</text>
+<circle cx="630" cy="644" r="6" fill="#e0e0e0" stroke="#795548" stroke-width="1.5"/>
+<text x="619" y="648" font-size="11" font-weight="400" fill="#a5d6a7" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GP16</text>
+<text x="640" y="637" font-size="9" font-weight="400" fill="#9e9e9e" text-anchor="start">21</text>
+<rect x="60" y="118" width="240" height="100" rx="8" fill="#455a64" stroke="#0d1b2a" stroke-width="2"/>
+<text x="180" y="140" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Li-ion 1S cell</text>
+<text x="180" y="158" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">with charger / protection board</text>
+<rect x="294" y="162" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="172" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">+</text>
+<rect x="54" y="192" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="72" y="202" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">−</text>
+<rect x="60" y="290" width="240" height="320" rx="8" fill="#1565c0" stroke="#0d1b2a" stroke-width="2"/>
+<text x="180" y="312" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2.13" e-paper</text>
+<text x="180" y="330" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">SPI, 122×250, B/W/Y/R</text>
+<rect x="294" y="404" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="414" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">DC</text>
+<rect x="294" y="430" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="440" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">CS</text>
+<rect x="294" y="456" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="466" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">GND</text>
+<rect x="294" y="482" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="492" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">CLK</text>
+<rect x="294" y="508" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="518" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">DIN</text>
+<rect x="294" y="534" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="544" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">RST</text>
+<rect x="294" y="560" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="570" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">BUSY</text>
+<rect x="294" y="586" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="288" y="596" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">VCC</text>
+<rect x="700" y="280" width="160" height="120" rx="8" fill="#6d4c41" stroke="#0d1b2a" stroke-width="2"/>
+<text x="780" y="302" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Soil sensor</text>
+<text x="780" y="320" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">capacitive, analog</text>
+<rect x="694" y="300" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="310" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">VCC</text>
+<rect x="694" y="326" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="336" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<rect x="694" y="378" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="388" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">AOUT</text>
+<rect x="900" y="418" width="160" height="74" rx="8" fill="#37474f" stroke="#0d1b2a" stroke-width="2"/>
+<text x="980" y="440" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Relay module</text>
+<rect x="894" y="430" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="912" y="440" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">IN</text>
+<rect x="894" y="456" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="912" y="466" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<rect x="914" y="412" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="932" y="422" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">VCC</text>
+<rect x="1054" y="434" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="1048" y="444" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">COM</text>
+<rect x="1054" y="464" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="1048" y="474" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">NO</text>
+<rect x="700" y="476" width="160" height="174" rx="8" fill="#283593" stroke="#0d1b2a" stroke-width="2"/>
+<text x="780" y="498" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">DS3231 RTC</text>
+<text x="780" y="516" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">I2C, coin cell</text>
+<rect x="694" y="482" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="492" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">SCL</text>
+<rect x="694" y="508" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="518" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">SDA</text>
+<rect x="694" y="534" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="544" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">VCC</text>
+<rect x="694" y="560" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="570" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
+<rect x="694" y="586" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="712" y="596" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">SQW</text>
+<rect x="1100" y="120" width="120" height="80" rx="8" fill="#bf360c" stroke="#0d1b2a" stroke-width="2"/>
+<text x="1160" y="142" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">5 V supply</text>
+<text x="1160" y="160" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">for the pump</text>
+<rect x="1114" y="114" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="1132" y="124" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">+</text>
+<rect x="1194" y="114" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="1212" y="124" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">−</text>
+<circle cx="1150" cy="560" r="30" fill="#78909c" stroke="#37474f" stroke-width="3"/>
+<text x="1150" y="565" font-size="18" font-weight="700" fill="#fff" text-anchor="middle">M</text>
+<text x="1150" y="610" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="middle">Pump</text>
+<text x="40" y="770" font-size="11" font-weight="400" fill="#555" text-anchor="start">Wires that cross without a dot are not connected. Dots mark rail connections.   All grounds are common, including the pump supply. Never power the pump from the Pico.</text>
+<text x="40" y="785" font-size="11" font-weight="400" fill="#555" text-anchor="start">GP29 / ADC3 reads VSYS through the Pico's on-board divider (no wire needed).   Relay: active-LOW by default (USE_RELAY_GND_ON). Check it accepts a 3.3 V input.</text>
+</svg>

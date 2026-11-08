@@ -22,9 +22,18 @@
 
 #define MIN_HUMIDITY 40.0f
 
+// Soil sensor sanity checks. A reading is a fault (no watering) when the
+// average raw value is below SENSOR_MIN_RAW (shorted/disconnected) or the
+// samples spread by more than SENSOR_MAX_SPREAD (floating wire).
+#define SENSOR_SAMPLES 16
+#define SENSOR_MIN_RAW 300
+#define SENSOR_MAX_SPREAD 300
+
 #define TIME_POMP_ON 5000
 #define POMP_PIN 22
-#define USE_RELAY_GND_ON true
+#define USE_RELAY_GND_ON true // true: relay is active-LOW, false: active-HIGH
+#define POMP_ON_LEVEL (!USE_RELAY_GND_ON)
+#define POMP_OFF_LEVEL (USE_RELAY_GND_ON)
 
 #define TEMP_SENSOR_CHANNEL 4
 
@@ -90,6 +99,46 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 #define EPD_DC_PIN 8
 #define CANVAS_BUFFER_SIZE (((EPD_2_13_WIDTH * 2 + 7) / 8) * EPD_2_13_HEIGHT)
 
+// All text uses one font family (the driver's Tahoma bitmap font) in three
+// sizes. Enable each size in CMakeLists.txt (USE_FONT_TAHOMA_*).
+#define FONT_SMALL FONT_TAHOMA_8   // labels, status, header, footer
+#define FONT_MEDIUM FONT_TAHOMA_12 // plant name
+#define FONT_LARGE FONT_TAHOMA_16  // moisture % and temperature values
+
+// Section labels. The template has no text; these are drawn on top of it.
+// Capitals start 1 px below y.
+#define LABEL_PLANT_TEXT "PLANT"
+#define LABEL_PLANT_X 10
+#define LABEL_PLANT_Y 28
+
+#define LABEL_MOISTURE_TEXT "SOIL MOISTURE"
+#define LABEL_MOISTURE_X 10
+#define LABEL_MOISTURE_Y 83
+
+#define LABEL_SCALE_Y 148 // DRY / OK / WET under the moisture bar, centered
+#define LABEL_DRY_CX 28 // segment centers of the template bar (12..44..76..109)
+#define LABEL_OK_CX 60
+#define LABEL_WET_CX 93
+
+#define LABEL_TEMP_TEXT "TEMPERATURE"
+#define LABEL_TEMP_X 42 // above the value, right of the thermometer
+#define LABEL_TEMP_Y 172
+
+#define LABEL_REFRESH_TEXT "LAST REFRESH"
+#define LABEL_REFRESH_X 30
+#define LABEL_REFRESH_Y 213
+
+// Header title (top left), smallest font (Tahoma 8, 11 px high).
+// The area from SLOT_TITLE_X up to the battery icon is cleared first, which
+// also hides the template's red status dot. About 58 px wide: "shatterbind"
+// takes 54 px.
+#define HEADER_TITLE_TEXT "shatterbind"
+#define SLOT_TITLE_X 6
+#define SLOT_TITLE_Y 5
+#define TITLE_FONT FONT_SMALL
+#define TITLE_FONT_HEIGHT 11
+#define TITLE_AREA_END_X 63 // last free column before the battery icon
+
 // Battery Slot
 #define SLOT_BATTERY_X 90
 #define SLOT_BATTERY_Y 5
@@ -107,37 +156,37 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 // Plant Hero Card
 #define SLOT_PLANT_NAME_X 12
 #define SLOT_PLANT_NAME_Y 38
-#define PLANT_NAME_TEXT "MONSTERA"
+#define PLANT_NAME_TEXT "Indian"
 
 #define SLOT_PLANT_SUB_X 12
 #define SLOT_PLANT_SUB_Y 54
-#define PLANT_SUB_TEXT "DELICIOSA"
+#define PLANT_SUB_TEXT "Laurel"
 
 #define SLOT_PLANT_ZONE_X 12
 #define SLOT_PLANT_ZONE_Y 64
 
-// Soil Moisture Card
+// Soil Moisture Card (template y 81..164)
 #define SLOT_MOISTURE_PCT_X 42
-#define SLOT_MOISTURE_PCT_Y 92
+#define SLOT_MOISTURE_PCT_Y 99
 
 #define SLOT_MOISTURE_STATUS_X 42
-#define SLOT_MOISTURE_STATUS_Y 112
-#define STATUS_WATERING_TEXT "WATERING!"
+#define SLOT_MOISTURE_STATUS_Y 121
+// The status shows what this wake did, so it stays true until the next wake.
+#define STATUS_WATERED_FORMAT "WATERED %us" // %u = pump run time in seconds
 #define STATUS_OPTIMAL_TEXT "OPTIMAL"
+#define STATUS_SENSOR_ERROR_TEXT "SENSOR ERR"
+#define STATUS_MAX_WIDTH 73 // px from SLOT_MOISTURE_STATUS_X to the card edge
 
 // Moisture Progress Bar
 #define MOISTURE_BAR_X 13
-#define MOISTURE_BAR_Y 127
-#define MOISTURE_BAR_MAX_WIDTH 95
-#define MOISTURE_BAR_HEIGHT 5
+#define MOISTURE_BAR_Y 138 // inside of the template bar (137..144)
+#define MOISTURE_BAR_MAX_WIDTH 96
+#define MOISTURE_BAR_HEIGHT 6
 
-// Temperature Card
-#define SLOT_TEMP_VAL_X 42
-#define SLOT_TEMP_VAL_Y 164
-
-#define SLOT_TEMP_LABEL_X 42
-#define SLOT_TEMP_LABEL_Y 184
-#define TEMP_LABEL_TEXT "AMBIENT TEMP"
+// Temperature Card (template y 170..201, thermometer icon y 174..196).
+// Label and value form one column next to the icon.
+#define SLOT_TEMP_VAL_X 42 // same column as the moisture value
+#define SLOT_TEMP_VAL_Y 182
 
 // Footer Card
 #define SLOT_FOOTER_TIME_X 30
@@ -145,7 +194,7 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 
 #define SLOT_FOOTER_CYCLE_X 30
 #define SLOT_FOOTER_CYCLE_Y 235
-#define FOOTER_CYCLE_FORMAT "Alarm: %s cycle" // %s = e.g. "1h", "2d", "1d 6h"
+#define FOOTER_CYCLE_FORMAT "Cycle: %s" // %s = e.g. "1h", "2d", "1d 6h"
 
 static int enter_power_off_state(void) {
   stdio_flush();
@@ -218,25 +267,55 @@ static void draw_battery(epd_t *epd, float vsys, uint8_t *canvas) {
     snprintf(text, sizeof(text), "%.2fV", vsys);
   }
 
-  draw_text_with_bg(epd, SLOT_BATTERY_X, SLOT_BATTERY_Y, text, FONT_TAHOMA_8,
+  draw_text_with_bg(epd, SLOT_BATTERY_X, SLOT_BATTERY_Y, text, FONT_SMALL,
                     bars <= 1 ? RED : BLACK, 1, WHITE, canvas);
 }
 
-void pomp(float humidity) {
-
-  if (humidity < MIN_HUMIDITY) {
-    gpio_put(POMP_PIN, !USE_RELAY_GND_ON);
-    sleep_ms(TIME_POMP_ON);
-  }
-
-  gpio_put(POMP_PIN, USE_RELAY_GND_ON);
+/** Draws text horizontally centered on cx (no background fill). */
+static void draw_text_centered(epd_t *epd, int cx, int y, const char *text,
+                               text_type_t font, color_t color,
+                               uint8_t *canvas) {
+  const int w = canvas_get_text_width(text, font, 1);
+  draw_text(epd, (uint16_t)(cx - w / 2), (uint16_t)y, text, font, color, 1,
+            canvas);
 }
 
+/**
+ * Draws e.g. "21.1°C" in FONT_LARGE. The font has no degree glyph, so the
+ * degree sign is drawn as a small ring at the top of the digits.
+ */
+static void draw_temperature(epd_t *epd, int x, int y, float temp_c,
+                             uint8_t *canvas) {
+  char value[12];
+  snprintf(value, sizeof(value), "%.1f", temp_c);
+  draw_text(epd, (uint16_t)x, (uint16_t)y, value, FONT_LARGE, BLACK, 1, canvas);
+
+  // 5x5 ring, 1 px gap after the digits, aligned with the top of the capitals
+  const int rx = x + canvas_get_text_width(value, FONT_LARGE, 1) + 2;
+  const int ry = y + 1;
+  fill_rect(epd, rx + 1, ry, 3, 1, BLACK, canvas);
+  fill_rect(epd, rx + 1, ry + 4, 3, 1, BLACK, canvas);
+  fill_rect(epd, rx, ry + 1, 1, 3, BLACK, canvas);
+  fill_rect(epd, rx + 4, ry + 1, 1, 3, BLACK, canvas);
+
+  draw_text(epd, (uint16_t)(rx + 6), (uint16_t)y, "C", FONT_LARGE, BLACK, 1,
+            canvas);
+}
+
+/** Runs the pump for run_ms milliseconds (0 = don't run), then switches off. */
+static void pomp(uint32_t run_ms) {
+  if (run_ms > 0) {
+    gpio_put(POMP_PIN, POMP_ON_LEVEL);
+    sleep_ms(run_ms);
+  }
+
+  gpio_put(POMP_PIN, POMP_OFF_LEVEL);
+}
+
+/** Core 1: receives the pump run time in ms from core 0, runs the pump. */
 static void core1_entry(void) {
-  uint32_t raw = multicore_fifo_pop_blocking();
-  float humidity;
-  memcpy(&humidity, &raw, sizeof(float));
-  pomp(humidity);
+  const uint32_t run_ms = multicore_fifo_pop_blocking();
+  pomp(run_ms);
   multicore_fifo_push_blocking(1); // signal done
 }
 
@@ -252,13 +331,34 @@ static float read_onboard_temperature(bool toCelsius) {
   return toCelsius ? tempC : tempC * 9 / 5 + 32;
 }
 
-static uint16_t read_humiduty() {
-  uint16_t raw;
+typedef struct {
+  uint16_t raw;    // averaged ADC value
+  uint16_t spread; // max - min of the samples
+  float humidity;  // %, not clamped
+  bool ok;         // false = sensor fault, don't water
+} soil_reading_t;
 
+static soil_reading_t read_soil(void) {
   adc_select_input(HUMIDITY_ADC_PIN);
-  raw = adc_read();
 
-  return raw;
+  uint32_t sum = 0;
+  uint16_t min = UINT16_MAX;
+  uint16_t max = 0;
+
+  for (int i = 0; i < SENSOR_SAMPLES; i++) {
+    const uint16_t v = adc_read();
+    sum += v;
+    if (v < min) min = v;
+    if (v > max) max = v;
+    sleep_us(100);
+  }
+
+  soil_reading_t r;
+  r.raw = (uint16_t)(sum / SENSOR_SAMPLES);
+  r.spread = max - min;
+  r.humidity = (AIR_VALUE - r.raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+  r.ok = r.raw >= SENSOR_MIN_RAW && r.spread <= SENSOR_MAX_SPREAD;
+  return r;
 }
 
 /** Sortable key for comparing two RTC date/times (2000-2099). */
@@ -393,6 +493,18 @@ static void blink(uint32_t ms) {
 }
 
 int main() {
+  // Pump pin first, before anything that can take time: latch the "off"
+  // level before switching the pin to output. gpio_set_dir() alone would
+  // drive it LOW, which turns an active-LOW relay (and the pump) on.
+  gpio_init(POMP_PIN);
+  gpio_put(POMP_PIN, POMP_OFF_LEVEL);
+  gpio_set_dir(POMP_PIN, GPIO_OUT);
+#if USE_RELAY_GND_ON
+  gpio_pull_up(POMP_PIN);
+#else
+  gpio_pull_down(POMP_PIN);
+#endif
+
   stdio_init_all();
   multicore_launch_core1(core1_entry);
 
@@ -409,19 +521,9 @@ int main() {
 
   on_state = powman_power_state_with_domain_on(
       on_state, POWMAN_POWER_DOMAIN_SWITCHED_CORE);
-  on_state = powman_power_state_with_domain_on(on_state,
-                                               POWMAN_POWER_DOMAIN_XIP_CACHE);
+  on_state = powman_power_state_with_domain_on(on_state, POWMAN_POWER_DOMAIN_XIP_CACHE);
 
   humidity_sensor_init(26);
-
-  gpio_init(POMP_PIN);
-  gpio_set_dir(POMP_PIN, GPIO_OUT);
-
-#ifdef USE_RELAY_GND_ON
-  gpio_pull_up(POMP_PIN);
-#else
-  gpio_pull_down(POMP_PIN);
-#endif
 
   gpio_init(WAKEUP_GPIO);
   gpio_set_dir(WAKEUP_GPIO, GPIO_IN);
@@ -445,8 +547,14 @@ int main() {
   const bool now_ok = ds3231_read_time(&now);
   schedule_next_alarm(&now, now_ok);
 
-  const uint16_t raw = read_humiduty();
-  float humidity = (AIR_VALUE - raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+  const soil_reading_t soil = read_soil();
+  // Decided once, on core 0; the display shows exactly what was done.
+  const bool water = soil.ok && soil.humidity < MIN_HUMIDITY;
+  const uint32_t pomp_run_ms = water ? TIME_POMP_ON : 0;
+  printf("Soil raw %u (spread %u) = %.1f%% -> %s\n", soil.raw, soil.spread,
+         soil.humidity,
+         !soil.ok ? "SENSOR FAULT" : (water ? "watering" : "no watering"));
+
   float temperature = read_onboard_temperature(true);
   // Read before the pump starts so the motor load doesn't drag VSYS down.
   float vsys = read_vsys();
@@ -457,14 +565,11 @@ int main() {
   printf("Current RTC time: %02d-%02d-%02d %02d:%02d:%02d\n", now.day,
          now.month, now.year, now.hour, now.min, now.sec);
   while (true) {
-    const uint16_t dbg_raw = read_humiduty();
-    float dbg_humidity =
-        (AIR_VALUE - dbg_raw) / (AIR_VALUE - WATER_VALUE) * 100.0f;
+    const soil_reading_t dbg = read_soil();
 
-    snprintf(buffer, sizeof(buffer), "%.2f%%", dbg_humidity);
-
-    printf("Raw humidity sensor value: %d\n", dbg_raw);
-    printf("Humidity: %s\n", buffer);
+    printf("Raw humidity sensor value: %u (spread %u, %s)\n", dbg.raw,
+           dbg.spread, dbg.ok ? "ok" : "SENSOR FAULT");
+    printf("Humidity: %.2f%%\n", dbg.humidity);
     printf("VSYS: %.2f V (%d bars)\n", read_vsys(),
            battery_bars(read_vsys()));
 
@@ -472,62 +577,101 @@ int main() {
   }
 #endif
 
-  // 1. Draw static template background containing icons, cards, and labels
+  // 1. Draw static template background (cards and icons), then the section
+  //    labels in the same font as the values. No background fill, so the
+  //    card borders under the text cells stay intact.
   draw_image(&epd, 0, 0, watering_template_122x250, WATERING_TEMPLATE_WIDTH,
              WATERING_TEMPLATE_HEIGHT, canvas);
+  draw_text(&epd, LABEL_PLANT_X, LABEL_PLANT_Y, LABEL_PLANT_TEXT, FONT_SMALL,
+            BLACK, 1, canvas);
+  draw_text(&epd, LABEL_MOISTURE_X, LABEL_MOISTURE_Y, LABEL_MOISTURE_TEXT,
+            FONT_SMALL, BLACK, 1, canvas);
+  draw_text_centered(&epd, LABEL_DRY_CX, LABEL_SCALE_Y, "DRY", FONT_SMALL,
+                     BLACK, canvas);
+  draw_text_centered(&epd, LABEL_OK_CX, LABEL_SCALE_Y, "OK", FONT_SMALL, BLACK,
+                     canvas);
+  draw_text_centered(&epd, LABEL_WET_CX, LABEL_SCALE_Y, "WET", FONT_SMALL,
+                     BLACK, canvas);
+  draw_text(&epd, LABEL_TEMP_X, LABEL_TEMP_Y, LABEL_TEMP_TEXT, FONT_SMALL,
+            BLACK, 1, canvas);
+  draw_text(&epd, LABEL_REFRESH_X, LABEL_REFRESH_Y, LABEL_REFRESH_TEXT,
+            FONT_SMALL, BLACK, 1, canvas);
 
-  // 2. Battery / Power slot (top right)
+  // 2. Header title (top left) and battery / power slot (top right)
+  fill_rect(&epd, SLOT_TITLE_X - 1, SLOT_TITLE_Y,
+            TITLE_AREA_END_X - SLOT_TITLE_X + 2, TITLE_FONT_HEIGHT, WHITE,
+            canvas);
+  if (canvas_get_text_width(HEADER_TITLE_TEXT, TITLE_FONT, 1) >
+      TITLE_AREA_END_X - SLOT_TITLE_X + 1) {
+    printf("WARNING: HEADER_TITLE_TEXT is too wide, it overlaps the battery.\n");
+  }
+  draw_text_with_bg(&epd, SLOT_TITLE_X, SLOT_TITLE_Y, HEADER_TITLE_TEXT,
+                    TITLE_FONT, BLACK, 1, WHITE, canvas);
+
   draw_battery(&epd, vsys, canvas);
 
+  // Values below are drawn without a background fill: the template is white
+  // there, and a filled text cell would cut into text or lines next to it.
+
   // 3. Plant Identity (Hero card)
-  draw_text_with_bg(&epd, SLOT_PLANT_NAME_X, SLOT_PLANT_NAME_Y, PLANT_NAME_TEXT,
-                    FONT_TAHOMA_12, BLACK, 1, WHITE, canvas);
-  draw_text_with_bg(&epd, SLOT_PLANT_SUB_X, SLOT_PLANT_SUB_Y, PLANT_SUB_TEXT,
-                    FONT_TAHOMA_8, RED, 1, WHITE, canvas);
+  draw_text(&epd, SLOT_PLANT_NAME_X, SLOT_PLANT_NAME_Y, PLANT_NAME_TEXT,
+            FONT_MEDIUM, BLACK, 1, canvas);
+  draw_text(&epd, SLOT_PLANT_SUB_X, SLOT_PLANT_SUB_Y, PLANT_SUB_TEXT,
+            FONT_SMALL, RED, 1, canvas);
 
   // 4. Soil Moisture card
-  int moisture_pct = (int)humidity;
+  // Moisture % and bar are the reading taken before the pump ran.
+  int moisture_pct = (int)soil.humidity;
   if (moisture_pct < 0) moisture_pct = 0;
   if (moisture_pct > 100) moisture_pct = 100;
+  const bool dry = soil.humidity < MIN_HUMIDITY;
 
-  snprintf(buffer, sizeof(buffer), "%d%%", moisture_pct);
-  draw_text_with_bg(&epd, SLOT_MOISTURE_PCT_X, SLOT_MOISTURE_PCT_Y, buffer,
-                    FONT_TAHOMA_16, BLACK, 1, WHITE, canvas);
+  if (soil.ok) {
+    snprintf(buffer, sizeof(buffer), "%d%%", moisture_pct);
+  } else {
+    snprintf(buffer, sizeof(buffer), "--%%");
+  }
+  draw_text(&epd, SLOT_MOISTURE_PCT_X, SLOT_MOISTURE_PCT_Y, buffer, FONT_LARGE,
+            BLACK, 1, canvas);
 
-  bool is_dry = (humidity < MIN_HUMIDITY);
-  draw_text_with_bg(&epd, SLOT_MOISTURE_STATUS_X, SLOT_MOISTURE_STATUS_Y,
-                    is_dry ? STATUS_WATERING_TEXT : STATUS_OPTIMAL_TEXT,
-                    FONT_TAHOMA_8, is_dry ? RED : BLACK, 1, WHITE, canvas);
+  if (!soil.ok) {
+    snprintf(buffer, sizeof(buffer), STATUS_SENSOR_ERROR_TEXT);
+  } else if (water) {
+    snprintf(buffer, sizeof(buffer), STATUS_WATERED_FORMAT,
+             (unsigned)((pomp_run_ms + 500) / 1000));
+  } else {
+    snprintf(buffer, sizeof(buffer), STATUS_OPTIMAL_TEXT);
+  }
+  if (canvas_get_text_width(buffer, FONT_SMALL, 1) > STATUS_MAX_WIDTH) {
+    printf("WARNING: status \"%s\" is wider than the card.\n", buffer);
+  }
+  draw_text(&epd, SLOT_MOISTURE_STATUS_X, SLOT_MOISTURE_STATUS_Y, buffer,
+            FONT_SMALL, (!soil.ok || water) ? RED : BLACK, 1, canvas);
 
   // Fill progress gauge bar (up to MOISTURE_BAR_MAX_WIDTH)
   uint16_t fill_w = (uint16_t)(MOISTURE_BAR_MAX_WIDTH * moisture_pct / 100);
-  if (fill_w > 0) {
+  if (soil.ok && fill_w > 0) {
     fill_rect(&epd, MOISTURE_BAR_X, MOISTURE_BAR_Y, fill_w, MOISTURE_BAR_HEIGHT,
-              is_dry ? RED : YELLOW, canvas);
+              dry ? RED : YELLOW, canvas);
   }
 
   // 5. Temperature card
-  snprintf(buffer, sizeof(buffer), "%.1f C", temperature);
-  draw_text_with_bg(&epd, SLOT_TEMP_VAL_X, SLOT_TEMP_VAL_Y, buffer,
-                    FONT_TAHOMA_16, BLACK, 1, WHITE, canvas);
-  draw_text_with_bg(&epd, SLOT_TEMP_LABEL_X, SLOT_TEMP_LABEL_Y, TEMP_LABEL_TEXT,
-                    FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
+  draw_temperature(&epd, SLOT_TEMP_VAL_X, SLOT_TEMP_VAL_Y, temperature,
+                   canvas);
 
   // 6. Footer (Timestamp & Next Cycle)
   snprintf(buffer, sizeof(buffer), "%02d-%02d %02d:%02d", now.month, now.day,
            now.hour, now.min);
-  draw_text_with_bg(&epd, SLOT_FOOTER_TIME_X, SLOT_FOOTER_TIME_Y, buffer,
-                    FONT_TAHOMA_8, RED, 1, WHITE, canvas);
+  draw_text(&epd, SLOT_FOOTER_TIME_X, SLOT_FOOTER_TIME_Y, buffer, FONT_SMALL,
+            RED, 1, canvas);
   char interval[12];
   format_wake_interval(interval, sizeof(interval));
   snprintf(buffer, sizeof(buffer), FOOTER_CYCLE_FORMAT, interval);
-  draw_text_with_bg(&epd, SLOT_FOOTER_CYCLE_X, SLOT_FOOTER_CYCLE_Y, buffer,
-                    FONT_TAHOMA_8, BLACK, 1, WHITE, canvas);
+  draw_text(&epd, SLOT_FOOTER_CYCLE_X, SLOT_FOOTER_CYCLE_Y, buffer, FONT_SMALL,
+            BLACK, 1, canvas);
 
-  // Send humidity to core 1 to run pump in parallel
-  uint32_t humidity_raw;
-  memcpy(&humidity_raw, &humidity, sizeof(float));
-  multicore_fifo_push_blocking(humidity_raw);
+  // Core 1 runs the pump (0 ms = stays off) while the display refreshes.
+  multicore_fifo_push_blocking(pomp_run_ms);
 
   epd_display(&epd, canvas);
   epd_sleep(&epd);
