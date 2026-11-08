@@ -34,7 +34,7 @@ The static background (cards, icons, moisture bar frame) is an image in the driv
 | --- | --- |
 | Header | `HEADER_TITLE_TEXT`, battery icon with 0–3 bars, battery voltage or `USB` |
 | Plant | `PLANT_NAME_TEXT` (medium), `PLANT_SUB_TEXT` (small, red) |
-| Soil moisture | Moisture % (large), status, filled bar (red below `MIN_HUMIDITY`, yellow above), DRY / OK / WET scale |
+| Soil moisture | Moisture % (large), raw ADC value (small, right), status, filled bar (red below `MIN_HUMIDITY`, yellow above), DRY / OK / WET scale |
 | Temperature | Chip temperature, e.g. `21.1°C` |
 | Last refresh | Date and time of this wake (`MM-DD HH:MM`), wake interval (`Cycle: 1h`, `Cycle: 1d 12h`) |
 
@@ -46,7 +46,7 @@ The status describes what this wake **did**, so it stays correct until the next 
 | `OPTIMAL` | No watering needed |
 | `SENSOR ERR` (red) | Invalid sensor reading, pump not run |
 
-The moisture % and bar show the reading taken **before** watering.
+The moisture % and bar show the reading taken **before** watering. The raw value (averaged ADC reading, 0–4095) is shown in every state, including `SENSOR ERR`, so you can calibrate `AIR_VALUE` / `WATER_VALUE` and diagnose sensor faults without `DEBUG`.
 
 ### Battery (single Li-ion cell on VSYS)
 
@@ -128,6 +128,7 @@ All grounds, including the pump supply's ground, must be common.
 | `HEADER_TITLE_TEXT` | `"shatterbind"` | Top-left title, max ~58 px (a serial warning is printed if it's too wide). |
 | `PLANT_NAME_TEXT` / `PLANT_SUB_TEXT` | `"Indian"` / `"Laurel"` | Plant card. |
 | `STATUS_WATERED_FORMAT` / `STATUS_OPTIMAL_TEXT` / `STATUS_SENSOR_ERROR_TEXT` | `"WATERED %us"` / `"OPTIMAL"` / `"SENSOR ERR"` | Moisture status, max 73 px wide. |
+| `MOISTURE_RAW_LABEL_TEXT` | `"raw"` | Label above the raw ADC value (right column of the moisture card, 23 px wide). |
 | `FOOTER_CYCLE_FORMAT` | `"Cycle: %s"` | Footer interval text; `%s` becomes e.g. `1h`, `2d`, `1d 12h`. |
 | `FONT_SMALL` / `FONT_MEDIUM` / `FONT_LARGE` | Tahoma 8 / 12 / 16 | The three text sizes. Each font must be enabled in `CMakeLists.txt` (`USE_FONT_TAHOMA_*`). |
 

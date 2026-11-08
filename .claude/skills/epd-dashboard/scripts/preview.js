@@ -4,7 +4,7 @@
 // It mirrors the drawing code in main.c (dashboard section of main(), draw_battery,
 // draw_temperature); keep it in sync when that code changes.
 //
-//   node preview.js [--state watered|optimal|error] [--moisture 34] [--temp 21.1]
+//   node preview.js [--state watered|optimal|error] [--moisture 34] [--raw 3076] [--temp 21.1]
 //                   [--vsys 3.92|usb] [--time "11-08 01:16"] [--scale 3] [--out file.png]
 //
 // Prints width warnings like the firmware does. Default output: build/dashboard_preview.png
@@ -12,7 +12,7 @@
 const path = require('path');
 const { ROOT, W, H, COLOR, readTemplate, pixelsToRgb, writePng, loadFont, textWidth, readDefines } = require('./lib');
 
-const opt = { state: 'watered', moisture: 34, temp: 21.1, vsys: 3.92, time: '11-08 01:16', scale: 3,
+const opt = { state: 'watered', moisture: 34, raw: 3076, temp: 21.1, vsys: 3.92, time: '11-08 01:16', scale: 3,
   out: path.join(ROOT, 'build/dashboard_preview.png') };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i += 2) opt[argv[i].replace(/^--/, '')] = argv[i + 1];
@@ -70,6 +70,10 @@ const ok = opt.state !== 'error';
 const water = opt.state === 'watered';
 const pct = Math.max(0, Math.min(100, Math.trunc(Number(opt.moisture))));
 drawText(D.SLOT_MOISTURE_PCT_X, D.SLOT_MOISTURE_PCT_Y, ok ? `${pct}%` : '--%', LARGE, COLOR.BLACK);
+// draw_text_right: raw ADC value column (shown also on a sensor fault)
+const right = (rx, y, t, f, c) => drawText(rx - textWidth(t, f) + 1, y, t, f, c);
+right(D.SLOT_MOISTURE_RAW_RIGHT_X, D.SLOT_MOISTURE_RAW_LABEL_Y, D.MOISTURE_RAW_LABEL_TEXT, SMALL, COLOR.BLACK);
+right(D.SLOT_MOISTURE_RAW_RIGHT_X, D.SLOT_MOISTURE_RAW_Y, String(opt.raw), SMALL, COLOR.BLACK);
 const status = !ok ? D.STATUS_SENSOR_ERROR_TEXT
   : water ? D.STATUS_WATERED_FORMAT.replace('%u', String(Math.round(D.TIME_POMP_ON / 1000))) : D.STATUS_OPTIMAL_TEXT;
 if (textWidth(status, SMALL) > D.STATUS_MAX_WIDTH) warnings.push(`status "${status}" is wider than the card (${textWidth(status, SMALL)} > ${D.STATUS_MAX_WIDTH} px)`);

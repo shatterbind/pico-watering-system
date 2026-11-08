@@ -17,8 +17,8 @@
 
 #define HUMIDITY_ADC_PIN 0 // 26
 
-#define AIR_VALUE 4095.0f
-#define WATER_VALUE 1100.0f
+#define AIR_VALUE 2600.0f
+#define WATER_VALUE 1000.0f
 
 #define MIN_HUMIDITY 40.0f
 
@@ -169,6 +169,13 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 #define SLOT_MOISTURE_PCT_X 42
 #define SLOT_MOISTURE_PCT_Y 99
 
+// Raw ADC value, small, right-aligned in the free column right of the % value
+// ("100%" ends at x 90, card border at x 117; "4095" is 23 px wide).
+#define MOISTURE_RAW_LABEL_TEXT "raw"
+#define SLOT_MOISTURE_RAW_RIGHT_X 115 // last pixel column of the text
+#define SLOT_MOISTURE_RAW_LABEL_Y 98
+#define SLOT_MOISTURE_RAW_Y 107 // number: capitals 108..115, next to the %
+
 #define SLOT_MOISTURE_STATUS_X 42
 #define SLOT_MOISTURE_STATUS_Y 121
 // The status shows what this wake did, so it stays true until the next wake.
@@ -277,6 +284,14 @@ static void draw_text_centered(epd_t *epd, int cx, int y, const char *text,
                                uint8_t *canvas) {
   const int w = canvas_get_text_width(text, font, 1);
   draw_text(epd, (uint16_t)(cx - w / 2), (uint16_t)y, text, font, color, 1,
+            canvas);
+}
+
+/** Draws text so that its last pixel column is right_x (no background). */
+static void draw_text_right(epd_t *epd, int right_x, int y, const char *text,
+                            text_type_t font, color_t color, uint8_t *canvas) {
+  const int w = canvas_get_text_width(text, font, 1);
+  draw_text(epd, (uint16_t)(right_x - w + 1), (uint16_t)y, text, font, color, 1,
             canvas);
 }
 
@@ -633,6 +648,13 @@ int main() {
   }
   draw_text(&epd, SLOT_MOISTURE_PCT_X, SLOT_MOISTURE_PCT_Y, buffer, FONT_LARGE,
             BLACK, 1, canvas);
+
+  // Raw ADC value (also on a sensor fault, to help diagnose it)
+  draw_text_right(&epd, SLOT_MOISTURE_RAW_RIGHT_X, SLOT_MOISTURE_RAW_LABEL_Y,
+                  MOISTURE_RAW_LABEL_TEXT, FONT_SMALL, BLACK, canvas);
+  snprintf(buffer, sizeof(buffer), "%u", soil.raw);
+  draw_text_right(&epd, SLOT_MOISTURE_RAW_RIGHT_X, SLOT_MOISTURE_RAW_Y, buffer,
+                  FONT_SMALL, BLACK, canvas);
 
   if (!soil.ok) {
     snprintf(buffer, sizeof(buffer), STATUS_SENSOR_ERROR_TEXT);
