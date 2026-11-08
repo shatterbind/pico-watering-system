@@ -9,7 +9,8 @@ C firmware (Pico SDK 2.2.0) for a Raspberry Pi Pico 2 (RP2350) plant watering co
 - Schedule: `schedule_next_alarm()` arms Alarm 1 every boot for the current hour (rounded down) + `WAKE_INTERVAL_DAYS`/`WAKE_INTERVAL_HOURS`, date+h+m+s match, with an hourly fallback if the RTC can't be read. The interval must stay < 28 days (date match; `_Static_assert`). Alarm 2 is unused and disabled.
 - Watering: `read_soil()` averages `SENSOR_SAMPLES` and flags a fault on low raw value or large spread. Core 0 decides once (`water = soil.ok && humidity < MIN_HUMIDITY`) and pushes the pump run time in ms (0 = off) to core 1 (`core1_entry`) through the multicore FIFO. Core 1 runs the pump and pushes `1` back; core 0 refreshes the display meanwhile and waits for that `1` before powering off. The display status must reflect what was done (`WATERED`, `OPTIMAL`, `SENSOR ERR`), not the intention.
 - VSYS is read on GP29/ADC3 (×3 divider) **before** the pump starts. Battery bars use single-cell Li-ion thresholds; above `VSYS_USB_V` it shows `USB`.
-- No pump interval guard exists; the wake interval is the only limit.
+- Pump guards in `decide_pomp()` (only when the soil is dry): no pump on a brown-out boot (`SKIP_POMP_AFTER_BROWNOUT`, status `SKIP: BOR`, prevents a pump-start → brown-out → reboot loop) and none below `MIN_POMP_VSYS_V` (status `LOW BATTERY`). VSYS and the reset reason are therefore read before the decision. No pump interval guard exists; the wake interval is the only limit.
+- Reset reason: `read_reset_reason()` reads `powman_hw->last_swcore_pwrup` (1 = GPIO wake source 0 = normal alarm wake; 0 = chip reset) and `powman_hw->chip_reset` (`HAD_BOR`, `HAD_POR`, ...). It's printed on every boot and, if not a normal wake, shown as a short red code right-aligned on the footer time line (codes ≤ 3 letters: the time can end at x 84).
 
 ## Display
 - Canvas: size with `EPD_2_13_CANVAS_SIZE` (or the equivalent `CANVAS_BUFFER_SIZE`), never `W*H/4`: rows are byte-padded (31 bytes × 250 rows, 2 bpp).
@@ -35,5 +36,5 @@ C firmware (Pico SDK 2.2.0) for a Raspberry Pi Pico 2 (RP2350) plant watering co
 
 ## Conventions
 - "pomp" means pump; keep the existing identifiers.
-- 2-space indent, clang-format style. The libraries use 4 spaces.
+- 2-space indent, LLVM style from `.clang-format`. Format with the clang-format bundled in the VS Code C/C++ extension (`~/.vscode/extensions/ms-vscode.cpptools-*/LLVM/bin/clang-format.exe -i main.c`). `lib/.clang-format` disables formatting for the submodules, which use 4 spaces and their own brace style.
 - There are no tests. Hardware behavior can only be verified on the device; the user checks layout by photographing the real display.

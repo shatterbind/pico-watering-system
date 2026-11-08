@@ -15,7 +15,7 @@ Every wake is a full reboot, so `main()` runs from the top once per wake:
    - Soil: 16 samples on `ADC0 / GP26`, averaged and mapped to 0–100 % using `AIR_VALUE` and `WATER_VALUE`.
    - Supply: `VSYS` on `ADC3 / GP29` (the Pico 2's on-board 1/3 divider), read before the pump starts.
    - Temperature: the RP2350's on-chip sensor (chip temperature, not true room temperature).
-5. **Decide.** Core 0 decides once: water if the reading is valid and moisture is below `MIN_HUMIDITY`. It sends the pump run time (`TIME_POMP_ON` ms, or 0) to core 1 through the multicore FIFO.
+5. **Decide.** Core 0 decides once (`decide_pomp()`): water if the reading is valid, moisture is below `MIN_HUMIDITY`, this boot wasn't a brown-out reset, and VSYS is at least `MIN_POMP_VSYS_V`. It sends the pump run time (`TIME_POMP_ON` ms, or 0) to core 1 through the multicore FIFO.
 6. **Water + display.** Core 1 runs the pump while core 0 draws and refreshes the e-paper.
 7. **Sleep.** Core 0 clears the alarm flag (releasing the `INT/SQW` wake line), waits for the pump to finish, and enters the `powman` power-off state. The low level on `GP15` at the next alarm wakes it.
 
@@ -23,6 +23,8 @@ Every wake is a full reboot, so `main()` runs from the top once per wake:
 
 - **Moist enough.** Moisture is at or above `MIN_HUMIDITY`. The display shows `OPTIMAL`.
 - **Sensor fault.** The averaged reading is below `SENSOR_MIN_RAW` (shorted or disconnected), or the 16 samples spread by more than `SENSOR_MAX_SPREAD` (floating wire). The display shows `SENSOR ERR` and `--%`.
+- **Brown-out restart** (`SKIP_POMP_AFTER_BROWNOUT`). The soil is dry, but this boot was caused by a brown-out reset (`BOR`). The likely cause is the pump's own start-up current on a weak battery; starting it again would reset the board again, in a loop. The display shows `SKIP: BOR`; the next normal alarm wake tries again.
+- **Battery too low** (`MIN_POMP_VSYS_V`). The soil is dry, but VSYS measured at rest is below the limit. The display shows `LOW BATTERY`. On USB (VSYS ~4.7 V) this never triggers.
 
 ## Display
 
@@ -36,7 +38,7 @@ The static background (cards, icons, moisture bar frame) is an image in the driv
 | Plant | `PLANT_NAME_TEXT` (medium), `PLANT_SUB_TEXT` (small, red) |
 | Soil moisture | Moisture % (large), raw ADC value (small, right), status, filled bar (red below `MIN_HUMIDITY`, yellow above), DRY / OK / WET scale |
 | Temperature | Chip temperature, e.g. `21.1°C` |
-| Last refresh | Date and time of this wake (`MM-DD HH:MM`), wake interval (`Cycle: 1h`, `Cycle: 1d 12h`) |
+| Last refresh | Date and time of this wake (`MM-DD HH:MM`), reset reason code (red, right; only when the boot wasn't a normal alarm wake), wake interval (`Cycle: 1h`, `Cycle: 1d 12h`) |
 
 The status describes what this wake **did**, so it stays correct until the next refresh:
 
@@ -45,8 +47,27 @@ The status describes what this wake **did**, so it stays correct until the next 
 | `WATERED 5s` (red) | The pump ran for `TIME_POMP_ON` |
 | `OPTIMAL` | No watering needed |
 | `SENSOR ERR` (red) | Invalid sensor reading, pump not run |
+| `SKIP: BOR` (red) | Dry, but the board just restarted from a brown-out, pump not run |
+| `LOW BATTERY` (red) | Dry, but the battery is below `MIN_POMP_VSYS_V`, pump not run |
 
 The moisture % and bar show the reading taken **before** watering. The raw value (averaged ADC reading, 0–4095) is shown in every state, including `SENSOR ERR`, so you can calibrate `AIR_VALUE` / `WATER_VALUE` and diagnose sensor faults without `DEBUG`.
+
+### Reset reason
+
+On every boot the firmware reads the RP2350's `POWMAN_LAST_SWCORE_PWRUP` (what powered the core up) and `POWMAN_CHIP_RESET` (cause of the last chip reset). A normal wake by the DS3231 alarm shows nothing; anything else shows a code in the footer, next to the time, until the next wake:
+
+| Code | Cause |
+|---|---|
+| *(none)* | Normal RTC alarm wake on GP15 |
+| `BOR` | **Brown-out**: the supply dropped too low, e.g. the pump's start-up current on a weak battery |
+| `POR` | Power-on (power connected) |
+| `RST` | RUN pin pulled low (reset button) |
+| `WDT` | Watchdog; also shown once after flashing a `.uf2` |
+| `GLT` | Glitch detector |
+| `DBG` | Debugger or software reset request |
+| `WK` | Another powman wake source (GPIO wake 1–3 or timer) |
+
+The codes and texts are `RESET_CODE_*` / `RESET_TEXT_*` defines in `main.c`, each with a comment; set a code to `""` to hide it on the display. The serial output prints the full reason and both raw register values on every boot, e.g. `Boot: BOR - brown-out: supply dropped too low (CHIP_RESET=0x00020000, LAST_SWCORE_PWRUP=0)`. Only the latest reset is recorded: the chip keeps no history, and a brown-out also clears the POWMAN scratch registers. The brown-out detector watches the chip's internal core supply, not the battery; use the VSYS reading for the battery voltage.
 
 ### Battery (single Li-ion cell on VSYS)
 
@@ -109,6 +130,8 @@ Pin numbers are the Pico 2's physical pins (USB at the top). 3.3 V comes from th
 | `AIR_VALUE` / `WATER_VALUE` | `4095` / `1100` | Raw ADC readings with the sensor in dry air and in water. Calibrate for your sensor (see `DEBUG`). |
 | `MIN_HUMIDITY` | `40` % | Water when moisture is below this value. |
 | `TIME_POMP_ON` | `5000` ms | How long the pump runs per wake. |
+| `SKIP_POMP_AFTER_BROWNOUT` | `1` | Don't run the pump on a boot caused by a brown-out reset. |
+| `MIN_POMP_VSYS_V` | `3.60` V | Don't run the pump when VSYS is below this. `0` disables the check. |
 | `SENSOR_SAMPLES` | `16` | ADC samples averaged per reading. |
 | `SENSOR_MIN_RAW` / `SENSOR_MAX_SPREAD` | `300` / `300` | Sensor fault thresholds (see above). Raise `SENSOR_MAX_SPREAD` if a working sensor shows `SENSOR ERR`. |
 | `POMP_PIN` | `22` | Relay control pin. |

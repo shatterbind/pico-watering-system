@@ -4,8 +4,9 @@
 // It mirrors the drawing code in main.c (dashboard section of main(), draw_battery,
 // draw_temperature); keep it in sync when that code changes.
 //
-//   node preview.js [--state watered|optimal|error] [--moisture 34] [--raw 3076] [--temp 21.1]
-//                   [--vsys 3.92|usb] [--time "11-08 01:16"] [--scale 3] [--out file.png]
+//   node preview.js [--state watered|optimal|error|skip-bor|low-battery] [--moisture 34] [--raw 3076] [--temp 21.1]
+//                   [--vsys 3.92|usb] [--time "11-08 01:16"] [--reset BOR] [--scale 3] [--out file.png]
+//   --reset: reset-reason code shown in the footer (empty = normal RTC alarm wake)
 //
 // Prints width warnings like the firmware does. Default output: build/dashboard_preview.png
 'use strict';
@@ -74,10 +75,17 @@ drawText(D.SLOT_MOISTURE_PCT_X, D.SLOT_MOISTURE_PCT_Y, ok ? `${pct}%` : '--%', L
 const right = (rx, y, t, f, c) => drawText(rx - textWidth(t, f) + 1, y, t, f, c);
 right(D.SLOT_MOISTURE_RAW_RIGHT_X, D.SLOT_MOISTURE_RAW_LABEL_Y, D.MOISTURE_RAW_LABEL_TEXT, SMALL, COLOR.BLACK);
 right(D.SLOT_MOISTURE_RAW_RIGHT_X, D.SLOT_MOISTURE_RAW_Y, String(opt.raw), SMALL, COLOR.BLACK);
-const status = !ok ? D.STATUS_SENSOR_ERROR_TEXT
-  : water ? D.STATUS_WATERED_FORMAT.replace('%u', String(Math.round(D.TIME_POMP_ON / 1000))) : D.STATUS_OPTIMAL_TEXT;
+// decide_pomp() outcome -> status text (states: watered, optimal, error, skip-bor, low-battery)
+const STATUS = {
+  error: D.STATUS_SENSOR_ERROR_TEXT,
+  watered: D.STATUS_WATERED_FORMAT.replace('%u', String(Math.round(D.TIME_POMP_ON / 1000))),
+  'skip-bor': D.STATUS_SKIP_BROWNOUT_TEXT,
+  'low-battery': D.STATUS_SKIP_LOW_BATTERY_TEXT,
+  optimal: D.STATUS_OPTIMAL_TEXT,
+};
+const status = STATUS[opt.state] ?? STATUS.optimal;
 if (textWidth(status, SMALL) > D.STATUS_MAX_WIDTH) warnings.push(`status "${status}" is wider than the card (${textWidth(status, SMALL)} > ${D.STATUS_MAX_WIDTH} px)`);
-drawText(D.SLOT_MOISTURE_STATUS_X, D.SLOT_MOISTURE_STATUS_Y, status, SMALL, !ok || water ? COLOR.RED : COLOR.BLACK);
+drawText(D.SLOT_MOISTURE_STATUS_X, D.SLOT_MOISTURE_STATUS_Y, status, SMALL, opt.state === 'optimal' ? COLOR.BLACK : COLOR.RED);
 const fillW = Math.trunc(D.MOISTURE_BAR_MAX_WIDTH * pct / 100);
 if (ok && fillW > 0) fillRect(D.MOISTURE_BAR_X, D.MOISTURE_BAR_Y, fillW, D.MOISTURE_BAR_HEIGHT, pct < D.MIN_HUMIDITY ? COLOR.RED : COLOR.YELLOW);
 
@@ -91,6 +99,7 @@ drawText(rx + 6, D.SLOT_TEMP_VAL_Y, 'C', LARGE, COLOR.BLACK);
 
 // ---- footer ----
 drawText(D.SLOT_FOOTER_TIME_X, D.SLOT_FOOTER_TIME_Y, opt.time, SMALL, COLOR.RED);
+if (opt.reset) right(D.SLOT_FOOTER_RESET_RIGHT_X, D.SLOT_FOOTER_RESET_Y, opt.reset, SMALL, COLOR.RED);
 const d = D.WAKE_INTERVAL_DAYS, h = D.WAKE_INTERVAL_HOURS;
 const interval = d > 0 && h > 0 ? `${d}d ${h}h` : d > 0 ? `${d}d` : `${h}h`;
 drawText(D.SLOT_FOOTER_CYCLE_X, D.SLOT_FOOTER_CYCLE_Y, D.FOOTER_CYCLE_FORMAT.replace('%s', interval), SMALL, COLOR.BLACK);

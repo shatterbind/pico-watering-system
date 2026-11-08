@@ -1,0 +1,4 @@
+# Style for main.c (2-space indent, 80 columns).
+# VS Code: C/C++ extension -> Format Document (Shift+Alt+F) uses this file.
+# CLI: clang-format -i main.c
+BasedOnStyle: LLVM

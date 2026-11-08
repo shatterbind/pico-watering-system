@@ -53,6 +53,17 @@
 #define BATTERY_3_BARS_V 3.95f // ~70-100 %
 #define BATTERY_2_BARS_V 3.75f // ~40-70 %
 #define BATTERY_1_BAR_V 3.55f  // ~10-40 %, below: empty, charge now
+
+/* =========================================================================
+ * Pump guards (decide_pomp)
+ * ========================================================================= */
+// Don't start the pump on a boot caused by a brown-out. The most likely cause
+// is the pump's own start-up current on a weak battery; starting it again
+// would reset the board again. The next normal alarm wake tries again.
+#define SKIP_POMP_AFTER_BROWNOUT 1
+// Don't start the pump when VSYS (measured at rest) is below this. On USB
+// VSYS is ~4.7 V, so this only applies on battery. 0 disables the check.
+#define MIN_POMP_VSYS_V 3.60f
 #define WAKEUP_GPIO 15
 
 static powman_power_state off_state = POWMAN_POWER_STATE_NONE;
@@ -182,6 +193,8 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 #define STATUS_WATERED_FORMAT "WATERED %us" // %u = pump run time in seconds
 #define STATUS_OPTIMAL_TEXT "OPTIMAL"
 #define STATUS_SENSOR_ERROR_TEXT "SENSOR ERR"
+#define STATUS_SKIP_BROWNOUT_TEXT "SKIP: BOR"      // dry, but booted from BOR
+#define STATUS_SKIP_LOW_BATTERY_TEXT "LOW BATTERY" // dry, but VSYS too low
 #define STATUS_MAX_WIDTH 73 // px from SLOT_MOISTURE_STATUS_X to the card edge
 
 // Moisture Progress Bar
@@ -202,6 +215,46 @@ _Static_assert(WAKE_INTERVAL_TOTAL_HOURS < 28 * 24,
 #define SLOT_FOOTER_CYCLE_X 30
 #define SLOT_FOOTER_CYCLE_Y 235
 #define FOOTER_CYCLE_FORMAT "Cycle: %s" // %s = e.g. "1h", "2d", "1d 6h"
+
+// Reset reason code (e.g. "BOR"), red, right-aligned on the footer time line.
+// Empty on a normal RTC alarm wake. The time ends at x 84 at most.
+#define SLOT_FOOTER_RESET_RIGHT_X 115
+#define SLOT_FOOTER_RESET_Y SLOT_FOOTER_TIME_Y
+
+/* =========================================================================
+ * Reset reasons (read_reset_reason)
+ * RESET_CODE_* is shown on the display (max 3 letters / ~22 px, "" = show
+ * nothing), RESET_TEXT_* is printed over serial on every boot. Checked in
+ * this order; the first match wins.
+ * ========================================================================= */
+// Normal wake: the DS3231 alarm pulled GP15 low (powman GPIO wake source 0)
+#define RESET_CODE_ALARM ""
+#define RESET_TEXT_ALARM "RTC alarm wake (GP15)"
+// Another powman wake source woke the chip (GPIO wake source 1..3 or timer)
+#define RESET_CODE_OTHER_WAKE "WK"
+#define RESET_TEXT_OTHER_WAKE "other powman wake source"
+// Brown-out: the core supply dropped below the brown-out threshold, e.g. the
+// pump's start-up current on a weak battery
+#define RESET_CODE_BROWNOUT "BOR"
+#define RESET_TEXT_BROWNOUT "brown-out: supply dropped too low"
+// Power-on: power was connected after being fully off
+#define RESET_CODE_POWER_ON "POR"
+#define RESET_TEXT_POWER_ON "power-on"
+// RUN pin pulled low (reset button)
+#define RESET_CODE_RUN_PIN "RST"
+#define RESET_TEXT_RUN_PIN "RUN pin low (reset button)"
+// Watchdog; the bootrom also reboots this way after a .uf2 is flashed
+#define RESET_CODE_WATCHDOG "WDT"
+#define RESET_TEXT_WATCHDOG "watchdog (also after flashing a .uf2)"
+// Glitch detector (supply/clock glitch, security feature)
+#define RESET_CODE_GLITCH "GLT"
+#define RESET_TEXT_GLITCH "glitch detector"
+// Debugger, rescue or software reset request
+#define RESET_CODE_DEBUG "DBG"
+#define RESET_TEXT_DEBUG "debugger / software reset request"
+// None of the flags above was set
+#define RESET_CODE_UNKNOWN "?"
+#define RESET_TEXT_UNKNOWN "unknown"
 
 static int enter_power_off_state(void) {
   stdio_flush();
@@ -251,9 +304,12 @@ static float read_vsys(void) {
 
 /** Number of battery bars (0-3) for a single Li-ion cell voltage. */
 static int battery_bars(float vsys) {
-  if (vsys >= BATTERY_3_BARS_V) return 3; // also USB power
-  if (vsys >= BATTERY_2_BARS_V) return 2;
-  if (vsys >= BATTERY_1_BAR_V) return 1;
+  if (vsys >= BATTERY_3_BARS_V)
+    return 3; // also USB power
+  if (vsys >= BATTERY_2_BARS_V)
+    return 2;
+  if (vsys >= BATTERY_1_BAR_V)
+    return 1;
   return 0;
 }
 
@@ -363,8 +419,10 @@ static soil_reading_t read_soil(void) {
   for (int i = 0; i < SENSOR_SAMPLES; i++) {
     const uint16_t v = adc_read();
     sum += v;
-    if (v < min) min = v;
-    if (v > max) max = v;
+    if (v < min)
+      min = v;
+    if (v > max)
+      max = v;
     sleep_us(100);
   }
 
@@ -432,8 +490,7 @@ static void setup_rtc(void) {
 
   // If the RTC can't be read, don't write either: a transient I2C error must
   // not roll a good clock back to the compile time.
-  if (!ds3231_oscillator_stopped(&osc_stopped) ||
-      !ds3231_read_time(&current)) {
+  if (!ds3231_oscillator_stopped(&osc_stopped) || !ds3231_read_time(&current)) {
     printf("ERROR: Failed to read RTC, time not changed.\n");
     return;
   }
@@ -501,6 +558,105 @@ static void format_wake_interval(char *out, size_t size) {
 #endif
 }
 
+typedef struct {
+  const char *code;    // short code for the display, "" = normal alarm wake
+  const char *text;    // description for the serial log
+  uint32_t chip_reset; // raw POWMAN_CHIP_RESET flags
+  uint32_t pwrup;      // raw POWMAN_LAST_SWCORE_PWRUP (0 = chip reset)
+  bool brownout;       // this boot was caused by a brown-out reset
+} reset_reason_t;
+
+/**
+ * Why this boot happened. LAST_SWCORE_PWRUP says what powered up the core:
+ * 1..4 = powman GPIO wake source 0..3 (source 0 = DS3231 alarm on GP15),
+ * 6 = powman timer, 0 = a full chip reset, whose cause is in CHIP_RESET.
+ * Only the latest reset is recorded; a brown-out also clears powman scratch.
+ */
+static reset_reason_t read_reset_reason(void) {
+  reset_reason_t r = {.chip_reset = powman_hw->chip_reset,
+                      .pwrup = powman_hw->last_swcore_pwrup &
+                               POWMAN_LAST_SWCORE_PWRUP_BITS};
+  const uint32_t f = r.chip_reset;
+
+  if (r.pwrup == 1) {
+    r.code = RESET_CODE_ALARM;
+    r.text = RESET_TEXT_ALARM;
+  } else if (r.pwrup >= 2 && r.pwrup <= 6) {
+    r.code = RESET_CODE_OTHER_WAKE;
+    r.text = RESET_TEXT_OTHER_WAKE;
+  } else if (f & POWMAN_CHIP_RESET_HAD_BOR_BITS) {
+    r.code = RESET_CODE_BROWNOUT;
+    r.text = RESET_TEXT_BROWNOUT;
+    r.brownout = true;
+  } else if (f & POWMAN_CHIP_RESET_HAD_POR_BITS) {
+    r.code = RESET_CODE_POWER_ON;
+    r.text = RESET_TEXT_POWER_ON;
+  } else if (f & POWMAN_CHIP_RESET_HAD_RUN_LOW_BITS) {
+    r.code = RESET_CODE_RUN_PIN;
+    r.text = RESET_TEXT_RUN_PIN;
+  } else if (f & (POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_RSM_BITS |
+                  POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_SWCORE_BITS |
+                  POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_BITS |
+                  POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_ASYNC_BITS)) {
+    r.code = RESET_CODE_WATCHDOG;
+    r.text = RESET_TEXT_WATCHDOG;
+  } else if (f & POWMAN_CHIP_RESET_HAD_GLITCH_DETECT_BITS) {
+    r.code = RESET_CODE_GLITCH;
+    r.text = RESET_TEXT_GLITCH;
+  } else if (f & (POWMAN_CHIP_RESET_HAD_DP_RESET_REQ_BITS |
+                  POWMAN_CHIP_RESET_HAD_RESCUE_BITS |
+                  POWMAN_CHIP_RESET_HAD_HZD_SYS_RESET_REQ_BITS)) {
+    r.code = RESET_CODE_DEBUG;
+    r.text = RESET_TEXT_DEBUG;
+  } else {
+    r.code = RESET_CODE_UNKNOWN;
+    r.text = RESET_TEXT_UNKNOWN;
+  }
+  return r;
+}
+
+typedef enum {
+  POMP_NOT_NEEDED,       // soil moist enough
+  POMP_RUN,              // dry: run the pump for TIME_POMP_ON
+  POMP_SENSOR_FAULT,     // invalid reading
+  POMP_SKIP_BROWNOUT,    // dry, but this boot came from a brown-out
+  POMP_SKIP_LOW_BATTERY, // dry, but VSYS below MIN_POMP_VSYS_V
+} pomp_decision_t;
+
+/**
+ * The single watering decision of this wake (core 0). The guards only apply
+ * when the soil is dry: a moist reading always shows OPTIMAL.
+ */
+static pomp_decision_t decide_pomp(const soil_reading_t *soil, float vsys,
+                                   const reset_reason_t *reset) {
+  if (!soil->ok)
+    return POMP_SENSOR_FAULT;
+  if (soil->humidity >= MIN_HUMIDITY)
+    return POMP_NOT_NEEDED;
+#if SKIP_POMP_AFTER_BROWNOUT
+  if (reset->brownout)
+    return POMP_SKIP_BROWNOUT;
+#endif
+  if (MIN_POMP_VSYS_V > 0 && vsys < MIN_POMP_VSYS_V)
+    return POMP_SKIP_LOW_BATTERY;
+  return POMP_RUN;
+}
+
+static const char *pomp_decision_name(pomp_decision_t d) {
+  switch (d) {
+  case POMP_RUN:
+    return "watering";
+  case POMP_SENSOR_FAULT:
+    return "SENSOR FAULT, no watering";
+  case POMP_SKIP_BROWNOUT:
+    return "dry, skipped: booted from brown-out";
+  case POMP_SKIP_LOW_BATTERY:
+    return "dry, skipped: battery too low";
+  default:
+    return "no watering needed";
+  }
+}
+
 static void blink(uint32_t ms) {
   gpio_put(PICO_DEFAULT_LED_PIN, 1);
   sleep_ms(ms);
@@ -523,6 +679,11 @@ int main() {
   stdio_init_all();
   multicore_launch_core1(core1_entry);
 
+  const reset_reason_t reset = read_reset_reason();
+  printf("Boot: %s%s%s (CHIP_RESET=0x%08lx, LAST_SWCORE_PWRUP=%lu)\n",
+         reset.code, reset.code[0] ? " - " : "", reset.text,
+         (unsigned long)reset.chip_reset, (unsigned long)reset.pwrup);
+
   static uint8_t canvas[CANVAS_BUFFER_SIZE] = {0};
   epd_t epd = epd_create(EPD_DC_PIN);
 
@@ -536,7 +697,8 @@ int main() {
 
   on_state = powman_power_state_with_domain_on(
       on_state, POWMAN_POWER_DOMAIN_SWITCHED_CORE);
-  on_state = powman_power_state_with_domain_on(on_state, POWMAN_POWER_DOMAIN_XIP_CACHE);
+  on_state = powman_power_state_with_domain_on(on_state,
+                                               POWMAN_POWER_DOMAIN_XIP_CACHE);
 
   humidity_sensor_init(26);
 
@@ -563,16 +725,16 @@ int main() {
   schedule_next_alarm(&now, now_ok);
 
   const soil_reading_t soil = read_soil();
-  // Decided once, on core 0; the display shows exactly what was done.
-  const bool water = soil.ok && soil.humidity < MIN_HUMIDITY;
-  const uint32_t pomp_run_ms = water ? TIME_POMP_ON : 0;
-  printf("Soil raw %u (spread %u) = %.1f%% -> %s\n", soil.raw, soil.spread,
-         soil.humidity,
-         !soil.ok ? "SENSOR FAULT" : (water ? "watering" : "no watering"));
-
   float temperature = read_onboard_temperature(true);
   // Read before the pump starts so the motor load doesn't drag VSYS down.
   float vsys = read_vsys();
+
+  // Decided once, on core 0; the display shows exactly what was done.
+  const pomp_decision_t decision = decide_pomp(&soil, vsys, &reset);
+  const bool water = decision == POMP_RUN;
+  const uint32_t pomp_run_ms = water ? TIME_POMP_ON : 0;
+  printf("Soil raw %u (spread %u) = %.1f%%, VSYS %.2f V -> %s\n", soil.raw,
+         soil.spread, soil.humidity, vsys, pomp_decision_name(decision));
 
   char buffer[32] = {0};
 
@@ -585,8 +747,7 @@ int main() {
     printf("Raw humidity sensor value: %u (spread %u, %s)\n", dbg.raw,
            dbg.spread, dbg.ok ? "ok" : "SENSOR FAULT");
     printf("Humidity: %.2f%%\n", dbg.humidity);
-    printf("VSYS: %.2f V (%d bars)\n", read_vsys(),
-           battery_bars(read_vsys()));
+    printf("VSYS: %.2f V (%d bars)\n", read_vsys(), battery_bars(read_vsys()));
 
     sleep_ms(1000);
   }
@@ -618,7 +779,8 @@ int main() {
             canvas);
   if (canvas_get_text_width(HEADER_TITLE_TEXT, TITLE_FONT, 1) >
       TITLE_AREA_END_X - SLOT_TITLE_X + 1) {
-    printf("WARNING: HEADER_TITLE_TEXT is too wide, it overlaps the battery.\n");
+    printf(
+        "WARNING: HEADER_TITLE_TEXT is too wide, it overlaps the battery.\n");
   }
   draw_text_with_bg(&epd, SLOT_TITLE_X, SLOT_TITLE_Y, HEADER_TITLE_TEXT,
                     TITLE_FONT, BLACK, 1, WHITE, canvas);
@@ -637,8 +799,10 @@ int main() {
   // 4. Soil Moisture card
   // Moisture % and bar are the reading taken before the pump ran.
   int moisture_pct = (int)soil.humidity;
-  if (moisture_pct < 0) moisture_pct = 0;
-  if (moisture_pct > 100) moisture_pct = 100;
+  if (moisture_pct < 0)
+    moisture_pct = 0;
+  if (moisture_pct > 100)
+    moisture_pct = 100;
   const bool dry = soil.humidity < MIN_HUMIDITY;
 
   if (soil.ok) {
@@ -656,19 +820,29 @@ int main() {
   draw_text_right(&epd, SLOT_MOISTURE_RAW_RIGHT_X, SLOT_MOISTURE_RAW_Y, buffer,
                   FONT_SMALL, BLACK, canvas);
 
-  if (!soil.ok) {
+  switch (decision) {
+  case POMP_SENSOR_FAULT:
     snprintf(buffer, sizeof(buffer), STATUS_SENSOR_ERROR_TEXT);
-  } else if (water) {
+    break;
+  case POMP_RUN:
     snprintf(buffer, sizeof(buffer), STATUS_WATERED_FORMAT,
              (unsigned)((pomp_run_ms + 500) / 1000));
-  } else {
+    break;
+  case POMP_SKIP_BROWNOUT:
+    snprintf(buffer, sizeof(buffer), STATUS_SKIP_BROWNOUT_TEXT);
+    break;
+  case POMP_SKIP_LOW_BATTERY:
+    snprintf(buffer, sizeof(buffer), STATUS_SKIP_LOW_BATTERY_TEXT);
+    break;
+  default:
     snprintf(buffer, sizeof(buffer), STATUS_OPTIMAL_TEXT);
+    break;
   }
   if (canvas_get_text_width(buffer, FONT_SMALL, 1) > STATUS_MAX_WIDTH) {
     printf("WARNING: status \"%s\" is wider than the card.\n", buffer);
   }
   draw_text(&epd, SLOT_MOISTURE_STATUS_X, SLOT_MOISTURE_STATUS_Y, buffer,
-            FONT_SMALL, (!soil.ok || water) ? RED : BLACK, 1, canvas);
+            FONT_SMALL, decision == POMP_NOT_NEEDED ? BLACK : RED, 1, canvas);
 
   // Fill progress gauge bar (up to MOISTURE_BAR_MAX_WIDTH)
   uint16_t fill_w = (uint16_t)(MOISTURE_BAR_MAX_WIDTH * moisture_pct / 100);
@@ -678,14 +852,18 @@ int main() {
   }
 
   // 5. Temperature card
-  draw_temperature(&epd, SLOT_TEMP_VAL_X, SLOT_TEMP_VAL_Y, temperature,
-                   canvas);
+  draw_temperature(&epd, SLOT_TEMP_VAL_X, SLOT_TEMP_VAL_Y, temperature, canvas);
 
   // 6. Footer (Timestamp & Next Cycle)
   snprintf(buffer, sizeof(buffer), "%02d-%02d %02d:%02d", now.month, now.day,
            now.hour, now.min);
   draw_text(&epd, SLOT_FOOTER_TIME_X, SLOT_FOOTER_TIME_Y, buffer, FONT_SMALL,
             RED, 1, canvas);
+  // Why this boot happened, if it wasn't the normal RTC alarm wake
+  if (reset.code[0]) {
+    draw_text_right(&epd, SLOT_FOOTER_RESET_RIGHT_X, SLOT_FOOTER_RESET_Y,
+                    reset.code, FONT_SMALL, RED, canvas);
+  }
   char interval[12];
   format_wake_interval(interval, sizeof(interval));
   snprintf(buffer, sizeof(buffer), FOOTER_CYCLE_FORMAT, interval);
