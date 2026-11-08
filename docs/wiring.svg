@@ -34,8 +34,8 @@
 <polyline points="700,384 630,384" fill="none" stroke="#00acc1" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="900,436 630,436" fill="none" stroke="#ff7043" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="900,462 630,462" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="920,418 920,40" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="920" cy="40" r="5" fill="#ef6c00"/>
+<polyline points="940,404 940,40" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="940" cy="40" r="5" fill="#ef6c00"/>
 <polyline points="700,488 630,488" fill="none" stroke="#3949ab" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="700,514 630,514" fill="none" stroke="#00897b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="700,540 665,540 665,700" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
@@ -52,8 +52,11 @@
 <circle cx="1120" cy="40" r="5" fill="#ef6c00"/>
 <polyline points="1200,120 1200,80" fill="none" stroke="#212121" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="1200" cy="80" r="5" fill="#212121"/>
+<rect x="364" y="78" width="50" height="36" rx="4" fill="#fafafa" stroke="#757575" stroke-width="1.5" stroke-dasharray="4 3"/>
+<polyline points="364,96 414,96" fill="none" stroke="#f4511e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polygon points="380,86 380,106 398,96" fill="#212121"/><line x1="399" y1="85" x2="399" y2="107" stroke="#212121" stroke-width="3"/>
-<text x="389" y="124" font-size="11" font-weight="400" fill="#1b1b1b" text-anchor="middle">Schottky</text>
+<text x="389" y="128" font-size="11" font-weight="400" fill="#1b1b1b" text-anchor="middle">Schottky diode</text>
+<text x="389" y="141" font-size="11" font-weight="400" fill="#757575" text-anchor="middle">(optional)</text>
 <rect x="470" y="120" width="160" height="552" rx="10" fill="#2e7d32" stroke="#1b5e20" stroke-width="2"/>
 <rect x="530" y="106" width="40" height="22" rx="4" fill="#b0bec5" stroke="#546e7a"/>
 <text x="550" y="146" font-size="10" font-weight="400" fill="#e8f5e9" text-anchor="middle">USB</text>
@@ -207,29 +210,30 @@
 <rect x="294" y="586" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="288" y="596" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">VCC</text>
 <rect x="700" y="280" width="160" height="120" rx="8" fill="#6d4c41" stroke="#0d1b2a" stroke-width="2"/>
-<text x="780" y="302" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Soil sensor</text>
-<text x="780" y="320" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">capacitive, analog</text>
+<text x="850" y="302" font-size="14" font-weight="700" fill="#fff" text-anchor="end">Soil sensor</text>
+<text x="850" y="320" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="end">capacitive, analog</text>
 <rect x="694" y="300" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="712" y="310" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">VCC</text>
 <rect x="694" y="326" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="712" y="336" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
 <rect x="694" y="378" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="712" y="388" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">AOUT</text>
-<rect x="900" y="418" width="160" height="74" rx="8" fill="#37474f" stroke="#0d1b2a" stroke-width="2"/>
-<text x="980" y="440" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Relay module</text>
+<rect x="900" y="404" width="160" height="108" rx="8" fill="#37474f" stroke="#0d1b2a" stroke-width="2"/>
+<text x="980" y="486" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">Relay module</text>
+<text x="980" y="504" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">5 V coil</text>
 <rect x="894" y="430" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="912" y="440" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">IN</text>
 <rect x="894" y="456" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="912" y="466" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
-<rect x="914" y="412" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
-<text x="932" y="422" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">VCC</text>
+<rect x="934" y="398" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
+<text x="940" y="424" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="middle" font-family="ui-monospace,Consolas,monospace">VCC</text>
 <rect x="1054" y="434" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="1048" y="444" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">COM</text>
 <rect x="1054" y="464" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="1048" y="474" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="end" font-family="ui-monospace,Consolas,monospace">NO</text>
 <rect x="700" y="476" width="160" height="174" rx="8" fill="#283593" stroke="#0d1b2a" stroke-width="2"/>
-<text x="780" y="498" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">DS3231 RTC</text>
-<text x="780" y="516" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">I2C, coin cell</text>
+<text x="850" y="498" font-size="14" font-weight="700" fill="#fff" text-anchor="end">DS3231 RTC</text>
+<text x="850" y="516" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="end">I2C, coin cell</text>
 <rect x="694" y="482" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="712" y="492" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">SCL</text>
 <rect x="694" y="508" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
@@ -240,16 +244,16 @@
 <text x="712" y="570" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">GND</text>
 <rect x="694" y="586" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
 <text x="712" y="596" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">SQW</text>
-<rect x="1100" y="120" width="120" height="80" rx="8" fill="#bf360c" stroke="#0d1b2a" stroke-width="2"/>
-<text x="1160" y="142" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">5 V supply</text>
-<text x="1160" y="160" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">for the pump</text>
+<rect x="1100" y="120" width="120" height="90" rx="8" fill="#bf360c" stroke="#0d1b2a" stroke-width="2"/>
+<text x="1160" y="184" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">5 V supply</text>
+<text x="1160" y="202" font-size="11" font-weight="400" fill="#e3f2fd" text-anchor="middle">for the pump</text>
 <rect x="1114" y="114" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
-<text x="1132" y="124" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">+</text>
+<text x="1120" y="140" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="middle" font-family="ui-monospace,Consolas,monospace">+</text>
 <rect x="1194" y="114" width="12" height="12" rx="2" fill="#c9a227" stroke="#7a5f00"/>
-<text x="1212" y="124" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="start" font-family="ui-monospace,Consolas,monospace">−</text>
+<text x="1200" y="140" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="middle" font-family="ui-monospace,Consolas,monospace">−</text>
 <circle cx="1150" cy="560" r="30" fill="#78909c" stroke="#37474f" stroke-width="3"/>
 <text x="1150" y="565" font-size="18" font-weight="700" fill="#fff" text-anchor="middle">M</text>
 <text x="1150" y="610" font-size="12" font-weight="400" fill="#1b1b1b" text-anchor="middle">Pump</text>
 <text x="40" y="770" font-size="11" font-weight="400" fill="#555" text-anchor="start">Wires that cross without a dot are not connected. Dots mark rail connections.   All grounds are common, including the pump supply. Never power the pump from the Pico.</text>
-<text x="40" y="785" font-size="11" font-weight="400" fill="#555" text-anchor="start">GP29 / ADC3 reads VSYS through the Pico's on-board divider (no wire needed).   Relay: active-LOW by default (USE_RELAY_GND_ON). Check it accepts a 3.3 V input.</text>
+<text x="40" y="785" font-size="11" font-weight="400" fill="#555" text-anchor="start">GP29 / ADC3 reads VSYS through the on-board divider. Dashed = optional part.   Relay: active-LOW by default (USE_RELAY_GND_ON). Check it accepts a 3.3 V input.</text>
 </svg>
